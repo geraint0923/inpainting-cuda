@@ -9,7 +9,7 @@
 using namespace std;
 using namespace cv;
 
-#define RADIUS	(32)
+#define RADIUS	(24)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
@@ -211,7 +211,8 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 			for(int k = 0; k < DIR_COUNT; k++) {
 				nodeTable[i][j].msg[k].resize(len);
 				for(int l = 0; l < len; l++) {
-					nodeTable[i][j].msg[k][l] = -1;
+					//nodeTable[i][j].msg[k][l] = -1;
+					nodeTable[i][j].msg[k][l] = FULL_MSG;
 				}
 			}
 			nodeTable[i][j].label = -1;
@@ -258,25 +259,25 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 		for(int j = 0; j < ww; j++) {
 			for(int k = 0; k < len; k++) {
 				float aroundMsg = 0;  // msgCount = 0;
-				if(i != 0 && nodeTable[i-1][j].msg[DIR_DOWN][k] > 0) {
+				if(i != 0) {
 					aroundMsg += nodeTable[i-1][j].msg[DIR_DOWN][k];
 					//msgCount++;
 				} else {
 					aroundMsg += FULL_MSG;
 				}
-				if(i != hh - 1 && nodeTable[i+1][j].msg[DIR_UP][k] > 0) {
+				if(i != hh - 1) {
 					aroundMsg += nodeTable[i+1][j].msg[DIR_UP][k];
 					//msgCount++;
 				} else {
 					aroundMsg += FULL_MSG;
 				}
-				if(j != 0 && nodeTable[i][j-1].msg[DIR_RIGHT][k] > 0) {
+				if(j != 0) {
 					aroundMsg += nodeTable[i][j-1].msg[DIR_RIGHT][k];
 					//msgCount++;
 				} else {
 					aroundMsg += FULL_MSG;
 				}
-				if(j != ww - 1 && nodeTable[i][j+1].msg[DIR_LEFT][k] > 0) {
+				if(j != ww - 1) {
 					aroundMsg += nodeTable[i][j+1].msg[DIR_LEFT][k];
 					//msgCount++;
 				} else {
@@ -293,6 +294,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// up
 					if(i != 0) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, DOWN_UP);
+						val /= 6.0;
 						oldVal = nodeTable[i][j].msg[DIR_UP][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = val;
@@ -303,6 +305,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// down
 					if(i != hh - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, UP_DOWN);
+						val /= 6.0;
 						oldVal = nodeTable[i][j].msg[DIR_DOWN][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
@@ -313,6 +316,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// left
 					if(j != 0) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, RIGHT_LEFT);
+						val /= 6.0;
 						oldVal = nodeTable[i][j].msg[DIR_LEFT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
@@ -323,6 +327,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// right
 					if(j != ww - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT);
+						val /= 6.0;
 						oldVal = nodeTable[i][j].msg[DIR_RIGHT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_RIGHT][ll];
@@ -360,7 +365,7 @@ void selectPatch(vector<vector<node> > &nodeTable) {
 				if(j + 1 < ww && nodeTable[i][j+1].msg[DIR_LEFT][k] > 0) 
 					bl -= nodeTable[i][j+1].msg[DIR_LEFT][k];
 				if(i == 1 && j == 1) {
-					cout<<k<<" =>"<<bl<<","<<FULL_MSG<<endl;
+					//cout<<k<<" =>"<<bl<<","<<FULL_MSG<<endl;
 				}
 				if(bl > maxB || maxIdx < 0) {
 					maxB = bl;
