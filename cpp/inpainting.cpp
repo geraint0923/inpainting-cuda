@@ -16,7 +16,7 @@ const int PATCH_HEIGHT = RADIUS;
 const int NODE_WIDTH = PATCH_WIDTH / 2;
 const int NODE_HEIGHT = PATCH_HEIGHT / 2;
 
-const float FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255;
+const float FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 / 2;
 
 class patch {
 	public:
@@ -36,19 +36,18 @@ enum EPOS {
 	EPOS_COUNT,
 };
 
-patch roundDownArea(patch p) {
+patch roundUpArea(patch p) {
 	patch res;
+	res.x = (p.x / NODE_WIDTH) * NODE_WIDTH;
+	res.y = (p.y / NODE_HEIGHT) * NODE_HEIGHT;
+	res.width = (p.x + p.width + NODE_WIDTH - 1) / NODE_WIDTH * NODE_WIDTH - res.x;
+	res.height = (p.y + p.height + NODE_WIDTH - 1) / NODE_HEIGHT * NODE_HEIGHT - res.y;
 	/*
-	res.x = (p.x / NODE_WIDTH) * NODE_WIDTH + NODE_WIDTH;
-	res.y = (p.y / NODE_HEIGHT) * NODE_HEIGHT + NODE_HEIGHT;
-	res.width = (p.x + p.width) / NODE_WIDTH * NODE_WIDTH - NODE_WIDTH - res.x;
-	res.height = (p.y + p.height) / NODE_HEIGHT * NODE_HEIGHT - NODE_HEIGHT - res.y;
-	*/
 	res.x = (p.x / NODE_WIDTH) * NODE_WIDTH - NODE_WIDTH;
 	res.y = (p.y / NODE_HEIGHT) * NODE_HEIGHT - NODE_HEIGHT;
 	res.width = (p.x + p.width) / NODE_WIDTH * NODE_WIDTH + NODE_WIDTH - res.x;
 	res.height = (p.y + p.height) / NODE_HEIGHT * NODE_HEIGHT + NODE_HEIGHT - res.y;
-
+	*/
 	return res;
 }
 
@@ -84,8 +83,12 @@ float calculateSSD(Mat &img, patch &p1, patch &p2, EPOS pos) {
 	int ww, hh;
 	switch(pos) {
 		case UP_DOWN:
+			/*
 			ww = p1.width < p2.width ? p1.width : p2.width;
 			hh = (p1.height - NODE_HEIGHT) < p2.height ? (p1.height - NODE_HEIGHT): p2.height;
+			*/
+			ww = PATCH_WIDTH;
+			hh = NODE_HEIGHT;
 			for(int i = 0; i < hh; i++) {
 				for(int j = 0; j < ww; j++) {
 					Vec3f pv1 = img.at<Vec3f>(p1.y + NODE_HEIGHT + i, p1.x + j),
@@ -98,8 +101,12 @@ float calculateSSD(Mat &img, patch &p1, patch &p2, EPOS pos) {
 			}
 			break;
 		case LEFT_RIGHT:
+			/*
 			hh = p1.height < p2.height ? p1.height : p2.height;
 			ww = (p1.width - NODE_WIDTH) < p2.width ? (p1.width - NODE_WIDTH) : p2.width;
+			*/
+			ww = NODE_WIDTH;
+			hh = PATCH_HEIGHT;
 			for(int i = 0; i < hh; i++) {
 				for(int j = 0; j < ww; j++) {
 					Vec3f pv1 = img.at<Vec3f>(p1.y + i, p1.x + NODE_WIDTH + j),
@@ -182,10 +189,12 @@ enum EDIR {
 class node {
 	public:
 		vector<vector<float> > msg;
+		vector<vector<float> > newMsg;
 		vector<float> edge_cost;
 		int label;
 		int x;
 		int y;
+		bool visted;
 };
 
 
@@ -194,6 +203,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 	    ww = p.width / NODE_WIDTH + 1,
 	    len = patchList.size();
 	nodeTable.resize(hh);
+	cout<<"hh="<<hh<<" ww="<<ww<<endl;
 	for(int i = 0; i < hh; i++) {
 		nodeTable[i].resize(ww);
 		for(int j = 0; j < ww; j++) {
@@ -201,7 +211,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 			for(int k = 0; k < DIR_COUNT; k++) {
 				nodeTable[i][j].msg[k].resize(len);
 				for(int l = 0; l < len; l++) {
-					nodeTable[i][j].msg[k][l] = FULL_MSG;
+					nodeTable[i][j].msg[k][l] = -1;
 				}
 			}
 			nodeTable[i][j].label = -1;
@@ -211,7 +221,9 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 			for(int k = 0; k < len; k++) {
 				float val = 0;
 				patch curPatch(0, 0, PATCH_WIDTH, PATCH_HEIGHT);
-				if((i == 0 || i == hh - 1) && (j == 0 || j == ww - 1)) {
+				//if((i == 0 || i == hh - 1) && (j == 0 || j == ww - 1)) {
+				if(((i == 0 || i == hh - 1) && (j >= 0 && j <= ww - 1)) ||
+						((j == 0 || j == ww - 1) && (i >= 0 && i <= hh -1))) {
 					if(j == 0) {
 						curPatch.x = nodeTable[i][j].x - PATCH_WIDTH;
 						curPatch.y = nodeTable[i][j].y - NODE_HEIGHT;
@@ -233,6 +245,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 				}
 				nodeTable[i][j].edge_cost[k] = val;
 			}
+			nodeTable[i][j].newMsg = nodeTable[i][j].msg;
 		}
 	}
 }
@@ -244,26 +257,36 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 	for(int i = 0; i < hh; i++) {
 		for(int j = 0; j < ww; j++) {
 			for(int k = 0; k < len; k++) {
-				float aroundMsg = 0, msgCount = 0;
-				if(i != 0) {
+				float aroundMsg = 0;  // msgCount = 0;
+				if(i != 0 && nodeTable[i-1][j].msg[DIR_DOWN][k] > 0) {
 					aroundMsg += nodeTable[i-1][j].msg[DIR_DOWN][k];
-					msgCount++;
+					//msgCount++;
+				} else {
+					aroundMsg += FULL_MSG;
 				}
-				if(i != hh - 1) {
+				if(i != hh - 1 && nodeTable[i+1][j].msg[DIR_UP][k] > 0) {
 					aroundMsg += nodeTable[i+1][j].msg[DIR_UP][k];
-					msgCount++;
+					//msgCount++;
+				} else {
+					aroundMsg += FULL_MSG;
 				}
-				if(j != 0) {
+				if(j != 0 && nodeTable[i][j-1].msg[DIR_RIGHT][k] > 0) {
 					aroundMsg += nodeTable[i][j-1].msg[DIR_RIGHT][k];
-					msgCount++;
+					//msgCount++;
+				} else {
+					aroundMsg += FULL_MSG;
 				}
-				if(j != ww - 1) {
+				if(j != ww - 1 && nodeTable[i][j+1].msg[DIR_LEFT][k] > 0) {
 					aroundMsg += nodeTable[i][j+1].msg[DIR_LEFT][k];
-					msgCount++;
+					//msgCount++;
+				} else {
+					aroundMsg += FULL_MSG;
 				}
+				/*
 				if(msgCount > 0.5) {
-					aroundMsg /= msgCount;
+					aroundMsg /= msgCount * 1;
 				}
+				*/
 				aroundMsg += nodeTable[i][j].edge_cost[k];
 				for(int ll = 0; ll < len; ll++) {
 					float val, oldVal;
@@ -272,7 +295,9 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 						val = aroundMsg + getSSD(ssdTable, k, ll, DOWN_UP);
 						oldVal = nodeTable[i][j].msg[DIR_UP][ll];
 						if(val < oldVal) {
-							nodeTable[i][j].msg[DIR_UP][ll] = val;
+							nodeTable[i][j].newMsg[DIR_UP][ll] = val;
+						} else {
+							nodeTable[i][j].newMsg[DIR_UP][ll] = oldVal;
 						}
 					}
 					// down
@@ -280,7 +305,9 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 						val = aroundMsg + getSSD(ssdTable, k, ll, UP_DOWN);
 						oldVal = nodeTable[i][j].msg[DIR_DOWN][ll];
 						if(val < oldVal) {
-							nodeTable[i][j].msg[DIR_DOWN][ll] = val;
+							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
+						} else {
+							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
 						}
 					}
 					// left
@@ -288,7 +315,9 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 						val = aroundMsg + getSSD(ssdTable, k, ll, RIGHT_LEFT);
 						oldVal = nodeTable[i][j].msg[DIR_LEFT][ll];
 						if(val < oldVal) {
-							nodeTable[i][j].msg[DIR_LEFT][ll] = val;
+							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
+						} else {
+							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
 						}
 					}
 					// right
@@ -296,11 +325,18 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT);
 						oldVal = nodeTable[i][j].msg[DIR_RIGHT][ll];
 						if(val < oldVal) {
-							nodeTable[i][j].msg[DIR_RIGHT][ll];
+							nodeTable[i][j].newMsg[DIR_RIGHT][ll];
+						} else {
+							nodeTable[i][j].newMsg[DIR_RIGHT][ll];
 						}
 					}
 				}
 			}
+		}
+	}
+	for(int i = 0; i < hh; i++) {
+		for(int j = 0; j < ww; j++) {
+			nodeTable[i][j].msg = nodeTable[i][j].newMsg;
 		}
 	}
 }
@@ -323,6 +359,9 @@ void selectPatch(vector<vector<node> > &nodeTable) {
 					bl -= nodeTable[i][j-1].msg[DIR_RIGHT][k];
 				if(j + 1 < ww && nodeTable[i][j+1].msg[DIR_LEFT][k] > 0) 
 					bl -= nodeTable[i][j+1].msg[DIR_LEFT][k];
+				if(i == 1 && j == 1) {
+					cout<<k<<" =>"<<bl<<","<<FULL_MSG<<endl;
+				}
 				if(bl > maxB || maxIdx < 0) {
 					maxB = bl;
 					maxIdx = k;
@@ -339,6 +378,7 @@ void pastePatch(Mat &img, node &n, patch &p) {
 	for(int i = 0; i < p.height; i++) {
 		for(int j = 0; j < p.width; j++) {
 			img.at<Vec3f>(yy + i, xx + j) = img.at<Vec3f>(p.y + i, p.x + j);
+			//img.at<Vec3f>(yy + i, xx + j) = Vec3f(0, 0, 0);
 		}
 	}
 }
@@ -385,7 +425,7 @@ int main(int argc, char **argv) {
 	cout<<"W="<<img.cols<<endl;
 	cout<<"H="<<img.rows<<endl;
 
-	patch missing = roundDownArea(patch(maskX, maskY, maskW, maskH));
+	patch missing = roundUpArea(patch(maskX, maskY, maskW, maskH));
 	cout<<"x="<<missing.x<<" y="<<missing.y<<" width="<<missing.width<<" height="<<missing.height<<endl;
 	vector<patch> patchList = genPatches(img, missing);
 	cout<<"Patch Size: "<<patchList.size()<<endl;
