@@ -10,13 +10,14 @@ using namespace std;
 using namespace cv;
 
 #define RADIUS	(24)
+#define RANGE_RATIO	(1.8f)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
 const int NODE_WIDTH = PATCH_WIDTH / 2;
 const int NODE_HEIGHT = PATCH_HEIGHT / 2;
 
-const float FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 / 2;
+const float FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 * 3 / 2;
 
 class patch {
 	public:
@@ -245,6 +246,8 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 					}
 				}
 				nodeTable[i][j].edge_cost[k] = val;
+				if(val < 1)
+					nodeTable[i][j].edge_cost[k] = FULL_MSG;
 			}
 			nodeTable[i][j].newMsg = nodeTable[i][j].msg;
 		}
@@ -295,9 +298,13 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					if(i != 0) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, DOWN_UP);
 						val /= 6.0;
-						oldVal = nodeTable[i][j].msg[DIR_UP][ll];
+						oldVal = nodeTable[i][j].newMsg[DIR_UP][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = val;
+							/*
+							if(i == 1 && j == 1)
+							cout<<"less => "<<i<<","<<j<<","<<k<<","<<ll<<" val="<<val<<" oldVal="<<oldVal<<"   last="<<nodeTable[i][j].newMsg[DIR_UP][ll]<<endl;
+							*/
 						} else {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = oldVal;
 						}
@@ -306,44 +313,51 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					if(i != hh - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, UP_DOWN);
 						val /= 6.0;
-						oldVal = nodeTable[i][j].msg[DIR_DOWN][ll];
+						oldVal = nodeTable[i][j].newMsg[DIR_DOWN][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
 						} else {
-							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
+							nodeTable[i][j].newMsg[DIR_DOWN][ll] = oldVal;
 						}
 					}
 					// left
 					if(j != 0) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, RIGHT_LEFT);
 						val /= 6.0;
-						oldVal = nodeTable[i][j].msg[DIR_LEFT][ll];
+						oldVal = nodeTable[i][j].newMsg[DIR_LEFT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
 						} else {
-							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
+							nodeTable[i][j].newMsg[DIR_LEFT][ll] = oldVal;
 						}
 					}
 					// right
 					if(j != ww - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT);
 						val /= 6.0;
-						oldVal = nodeTable[i][j].msg[DIR_RIGHT][ll];
+						oldVal = nodeTable[i][j].newMsg[DIR_RIGHT][ll];
 						if(val < oldVal) {
-							nodeTable[i][j].newMsg[DIR_RIGHT][ll];
+							nodeTable[i][j].newMsg[DIR_RIGHT][ll] = val;
 						} else {
-							nodeTable[i][j].newMsg[DIR_RIGHT][ll];
+							nodeTable[i][j].newMsg[DIR_RIGHT][ll] = oldVal;
 						}
 					}
 				}
 			}
 		}
 	}
+	/*
+	cout<<"value test old-value="<<nodeTable[1][1].msg[DIR_UP][2]<<endl;
+	cout<<"value test old-value="<<nodeTable[1][1].newMsg[DIR_UP][2]<<endl;
+	*/
 	for(int i = 0; i < hh; i++) {
 		for(int j = 0; j < ww; j++) {
 			nodeTable[i][j].msg = nodeTable[i][j].newMsg;
 		}
 	}
+	/*
+	cout<<"value test new-value="<<nodeTable[1][1].msg[DIR_UP][2]<<endl;
+	*/
 }
 
 void selectPatch(vector<vector<node> > &nodeTable) {
@@ -372,6 +386,7 @@ void selectPatch(vector<vector<node> > &nodeTable) {
 					maxIdx = k;
 				}
 			}
+			//cout<<i<<","<<j<<" => "<<maxB<<" "<<maxIdx<<endl;
 			nodeTable[i][j].label = maxIdx;
 		}
 	}
