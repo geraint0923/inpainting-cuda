@@ -269,7 +269,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			for(int k = 0; k < len; k++) {
 				float aroundMsg = 0, msgCount, matchFactor;
 				float msgFactor = 0.6;
-				matchFactor = 1.2;
+				matchFactor = 1.8;
 				msgCount = msgFactor * 3 + matchFactor;
 				if(i != 0) {
 					aroundMsg += nodeTable[i-1][j].msg[DIR_DOWN][k];
