@@ -267,7 +267,10 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 	for(int i = 0; i < hh; i++) {
 		for(int j = 0; j < ww; j++) {
 			for(int k = 0; k < len; k++) {
-				float aroundMsg = 0;  // msgCount = 0;
+				float aroundMsg = 0, msgCount, matchFactor;
+				float msgFactor = 0.6;
+				matchFactor = 1.2;
+				msgCount = msgFactor * 3 + matchFactor;
 				if(i != 0) {
 					aroundMsg += nodeTable[i-1][j].msg[DIR_DOWN][k];
 					//msgCount++;
@@ -297,14 +300,17 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					aroundMsg /= msgCount * 1;
 				}
 				*/
-				//aroundMsg *= 2;
+				aroundMsg *= msgFactor;
 				aroundMsg += nodeTable[i][j].edge_cost[k];
+				if(nodeTable[i][j].edge_cost[j] < 0.5)
+					msgCount++;
 				for(int ll = 0; ll < len; ll++) {
 					float val, oldVal;
 					// up
 					if(i != 0) {
-						val = aroundMsg + getSSD(ssdTable, k, ll, DOWN_UP);
-						val /= 10.0;
+						val = aroundMsg + getSSD(ssdTable, k, ll, DOWN_UP) * matchFactor;
+						val -= nodeTable[i-1][j].msg[DIR_DOWN][k] * msgFactor;
+						val /= msgCount;
 						oldVal = nodeTable[i][j].newMsg[DIR_UP][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = val;
@@ -318,8 +324,9 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					}
 					// down
 					if(i != hh - 1) {
-						val = aroundMsg + getSSD(ssdTable, k, ll, UP_DOWN);
-						val /= 10.0;
+						val = aroundMsg + getSSD(ssdTable, k, ll, UP_DOWN) * matchFactor;
+						val -= nodeTable[i+1][j].msg[DIR_UP][k] * msgFactor;
+						val /= msgCount;
 						oldVal = nodeTable[i][j].newMsg[DIR_DOWN][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
@@ -329,8 +336,9 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					}
 					// left
 					if(j != 0) {
-						val = aroundMsg + getSSD(ssdTable, k, ll, RIGHT_LEFT);
-						val /= 10.0;
+						val = aroundMsg + getSSD(ssdTable, k, ll, RIGHT_LEFT) * matchFactor;
+						val -= nodeTable[i][j-1].msg[DIR_RIGHT][k] * msgFactor;
+						val /= msgCount;
 						oldVal = nodeTable[i][j].newMsg[DIR_LEFT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
@@ -340,8 +348,9 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					}
 					// right
 					if(j != ww - 1) {
-						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT);
-						val /= 10.0;
+						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT) * matchFactor;
+						val -= nodeTable[i][j+1].msg[DIR_LEFT][k] * msgFactor;
+						val /= msgCount;
 						oldVal = nodeTable[i][j].newMsg[DIR_RIGHT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_RIGHT][ll] = val;
