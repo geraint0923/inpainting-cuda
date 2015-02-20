@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cmath>
 #include <unistd.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -10,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 #define RADIUS	(24)
-#define RANGE_RATIO	(1.8f)
+#define RANGE_RATIO	(1.4f)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
@@ -64,11 +65,16 @@ vector<patch> genPatches(Mat &img, patch p) {
 	vector<patch> res;
 	int hh = img.rows / NODE_HEIGHT,
 	    ww = img.cols / NODE_WIDTH;
+	float midX = p.x + p.width / 2,
+	      midY = p.y + p.height / 2;
 	for(int i = 1; i <= hh; i++) {
 		for(int j = 1; j <= ww; j++) {
 			int cX, cY;
+			float fcx = j * NODE_WIDTH, fcy = i * NODE_HEIGHT;
 			cY = i * NODE_HEIGHT - NODE_HEIGHT;
 			cX = j * NODE_WIDTH - NODE_WIDTH;
+			if(!(fabsf(fcx - midX) * 2 / p.width < RANGE_RATIO && fabsf(fcy - midY) * 2 / p.height < RANGE_RATIO))
+				continue;
 			if(img.rows - cY < PATCH_HEIGHT || img.cols - cX < PATCH_WIDTH)
 				continue;
 			patch cur(cX, cY, PATCH_WIDTH, PATCH_HEIGHT);
@@ -291,13 +297,14 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					aroundMsg /= msgCount * 1;
 				}
 				*/
+				aroundMsg *= 2;
 				aroundMsg += nodeTable[i][j].edge_cost[k];
 				for(int ll = 0; ll < len; ll++) {
 					float val, oldVal;
 					// up
 					if(i != 0) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, DOWN_UP);
-						val /= 6.0;
+						val /= 10.0;
 						oldVal = nodeTable[i][j].newMsg[DIR_UP][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = val;
@@ -312,7 +319,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// down
 					if(i != hh - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, UP_DOWN);
-						val /= 6.0;
+						val /= 10.0;
 						oldVal = nodeTable[i][j].newMsg[DIR_DOWN][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_DOWN][ll] = val;
@@ -323,7 +330,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// left
 					if(j != 0) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, RIGHT_LEFT);
-						val /= 6.0;
+						val /= 10.0;
 						oldVal = nodeTable[i][j].newMsg[DIR_LEFT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_LEFT][ll] = val;
@@ -334,7 +341,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					// right
 					if(j != ww - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT);
-						val /= 6.0;
+						val /= 10.0;
 						oldVal = nodeTable[i][j].newMsg[DIR_RIGHT][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_RIGHT][ll] = val;
