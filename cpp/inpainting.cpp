@@ -10,8 +10,8 @@
 using namespace std;
 using namespace cv;
 
-#define RADIUS	(24)
-#define RANGE_RATIO	(1.4f)
+#define RADIUS	(16)
+#define RANGE_RATIO	(2.0f)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
@@ -297,7 +297,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					aroundMsg /= msgCount * 1;
 				}
 				*/
-				aroundMsg *= 2;
+				//aroundMsg *= 2;
 				aroundMsg += nodeTable[i][j].edge_cost[k];
 				for(int ll = 0; ll < len; ll++) {
 					float val, oldVal;
@@ -429,6 +429,24 @@ void fillPatch(Mat &img, vector<vector<node> > &nodeTable, vector<patch> &patchL
 	}
 }
 
+#define RR 1
+void drawPoint(Mat &img, int x, int y) {
+	for(int i = x - RR; i < x + RR; i++) {
+		for(int j = y - RR; j < y + RR; j++) {
+			img.at<Vec3f>(j, i) = Vec3f(0.0f, 0.0f, 0.0f);
+		}
+	}
+}
+
+void drawRect(Mat &img, patch &p) {
+	for(int i =  p.y; i < p.y + p.height; i++) {
+		for(int j = p.x; j < p.x + p.width; j++) {
+			if((i == p.y) || (i == p.y + p.height - 1) || (j == p.x) || (j == p.x + p.width - 1))
+				drawPoint(img, j, i);
+		}
+	}
+}
+
 int main(int argc, char **argv) {
 	if(argc != 8) {
 		cout<<"Usage: "<<argv[0]<<" input x y w h output iter_time"<<endl;
@@ -468,6 +486,7 @@ int main(int argc, char **argv) {
 	}
 	selectPatch(nodeTable);
 	fillPatch(img, nodeTable, patchList);
+	drawRect(img, missing);
 
 	imwrite(output, img);
 	return 0;
