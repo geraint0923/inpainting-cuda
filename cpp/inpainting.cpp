@@ -18,7 +18,8 @@ const int PATCH_HEIGHT = RADIUS;
 const int NODE_WIDTH = PATCH_WIDTH / 2;
 const int NODE_HEIGHT = PATCH_HEIGHT / 2;
 
-const float FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 * 3 / 2;
+const float CONST_FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 * 3 / 2;
+float FULL_MSG = 0;
 
 class patch {
 	public:
@@ -155,6 +156,14 @@ vector<vector<vector<float> > > calculateSSDTable(Mat &img, vector<patch> &patch
 				res[i][j][DOWN_UP] = calculateSSD(img, patchList[j], patchList[i], UP_DOWN);
 				res[i][j][LEFT_RIGHT] = calculateSSD(img, patchList[i], patchList[j], LEFT_RIGHT);
 				res[i][j][RIGHT_LEFT] = calculateSSD(img, patchList[j], patchList[i], LEFT_RIGHT);
+				if(res[i][j][UP_DOWN] > FULL_MSG)
+					FULL_MSG = res[i][j][UP_DOWN];
+				if(res[i][j][DOWN_UP] > FULL_MSG)
+					FULL_MSG = res[i][j][DOWN_UP];
+				if(res[i][j][LEFT_RIGHT] > FULL_MSG)
+					FULL_MSG = res[i][j][LEFT_RIGHT];
+				if(res[i][j][RIGHT_LEFT] > FULL_MSG)
+					FULL_MSG = res[i][j][RIGHT_LEFT];
 			}
 		}
 	}
@@ -269,7 +278,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			for(int k = 0; k < len; k++) {
 				float aroundMsg = 0, msgCount, matchFactor;
 				float msgFactor = 0.6;
-				matchFactor = 1.8;
+				matchFactor = 10;
 				msgCount = msgFactor * 3 + matchFactor;
 				if(i != 0) {
 					aroundMsg += nodeTable[i-1][j].msg[DIR_DOWN][k];
