@@ -6,6 +6,8 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include "inpainting_cuda.h"
+
 
 using namespace std;
 using namespace cv;
@@ -21,23 +23,6 @@ const int NODE_HEIGHT = PATCH_HEIGHT / 2;
 const float CONST_FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 * 3 / 2;
 float FULL_MSG = 0;
 
-class patch {
-	public:
-		int x; // width
-		int y; // height
-		int width;
-		int height;
-		patch() : x(0), y(0), width(0), height(0) {}
-		patch(int xx, int yy, int ww, int hh) : x(xx), y(yy), width(ww), height(hh) {}
-};
-
-enum EPOS {
-	UP_DOWN = 0,
-	DOWN_UP,
-	LEFT_RIGHT,
-	RIGHT_LEFT,
-	EPOS_COUNT,
-};
 
 patch roundUpArea(patch p) {
 	patch res;
