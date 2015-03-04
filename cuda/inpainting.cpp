@@ -6,7 +6,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-#include "inpainting_cuda.h"
+#include "cuda_inpainting.h"
 
 
 using namespace std;
@@ -23,6 +23,7 @@ const int NODE_HEIGHT = PATCH_HEIGHT / 2;
 const float CONST_FULL_MSG = PATCH_HEIGHT * PATCH_WIDTH * 255 * 255 * 3 / 2;
 float FULL_MSG = 0;
 
+/*
 
 patch roundUpArea(patch p) {
 	patch res;
@@ -30,12 +31,6 @@ patch roundUpArea(patch p) {
 	res.y = (p.y / NODE_HEIGHT) * NODE_HEIGHT;
 	res.width = (p.x + p.width + NODE_WIDTH - 1) / NODE_WIDTH * NODE_WIDTH - res.x;
 	res.height = (p.y + p.height + NODE_WIDTH - 1) / NODE_HEIGHT * NODE_HEIGHT - res.y;
-	/*
-	res.x = (p.x / NODE_WIDTH) * NODE_WIDTH - NODE_WIDTH;
-	res.y = (p.y / NODE_HEIGHT) * NODE_HEIGHT - NODE_HEIGHT;
-	res.width = (p.x + p.width) / NODE_WIDTH * NODE_WIDTH + NODE_WIDTH - res.x;
-	res.height = (p.y + p.height) / NODE_HEIGHT * NODE_HEIGHT + NODE_HEIGHT - res.y;
-	*/
 	return res;
 }
 
@@ -76,10 +71,6 @@ float calculateSSD(Mat &img, patch &p1, patch &p2, EPOS pos) {
 	int ww, hh;
 	switch(pos) {
 		case UP_DOWN:
-			/*
-			ww = p1.width < p2.width ? p1.width : p2.width;
-			hh = (p1.height - NODE_HEIGHT) < p2.height ? (p1.height - NODE_HEIGHT): p2.height;
-			*/
 			ww = PATCH_WIDTH;
 			hh = NODE_HEIGHT;
 			for(int i = 0; i < hh; i++) {
@@ -94,10 +85,6 @@ float calculateSSD(Mat &img, patch &p1, patch &p2, EPOS pos) {
 			}
 			break;
 		case LEFT_RIGHT:
-			/*
-			hh = p1.height < p2.height ? p1.height : p2.height;
-			ww = (p1.width - NODE_WIDTH) < p2.width ? (p1.width - NODE_WIDTH) : p2.width;
-			*/
 			ww = NODE_WIDTH;
 			hh = PATCH_HEIGHT;
 			for(int i = 0; i < hh; i++) {
@@ -127,14 +114,7 @@ vector<vector<vector<float> > > calculateSSDTable(Mat &img, vector<patch> &patch
 	}
 	for(int i = 0; i < len; i++) {
 		for(int j = i; j < len; j++) {
-			if(0/*i == j*/) {
-				/*
-				 * do nothing since the result must be zero
-				 */
-				/*
-				for(int k = 0; k < EPOS_COUNT; k++) 
-					res[i][j].push_back(0);
-				*/
+			if(0) {
 			} else {
 				res[i][j].resize(EPOS_COUNT);
 				res[i][j][UP_DOWN] = calculateSSD(img, patchList[i], patchList[j], UP_DOWN);
@@ -289,11 +269,6 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 				} else {
 					aroundMsg += FULL_MSG;
 				}
-				/*
-				if(msgCount > 0.5) {
-					aroundMsg /= msgCount * 1;
-				}
-				*/
 				aroundMsg *= msgFactor;
 				aroundMsg += nodeTable[i][j].edge_cost[k];
 				if(nodeTable[i][j].edge_cost[j] < 0.5)
@@ -308,10 +283,6 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 						oldVal = nodeTable[i][j].newMsg[DIR_UP][ll];
 						if(val < oldVal) {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = val;
-							/*
-							if(i == 1 && j == 1)
-							cout<<"less => "<<i<<","<<j<<","<<k<<","<<ll<<" val="<<val<<" oldVal="<<oldVal<<"   last="<<nodeTable[i][j].newMsg[DIR_UP][ll]<<endl;
-							*/
 						} else {
 							nodeTable[i][j].newMsg[DIR_UP][ll] = oldVal;
 						}
@@ -356,18 +327,11 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			}
 		}
 	}
-	/*
-	cout<<"value test old-value="<<nodeTable[1][1].msg[DIR_UP][2]<<endl;
-	cout<<"value test old-value="<<nodeTable[1][1].newMsg[DIR_UP][2]<<endl;
-	*/
 	for(int i = 0; i < hh; i++) {
 		for(int j = 0; j < ww; j++) {
 			nodeTable[i][j].msg = nodeTable[i][j].newMsg;
 		}
 	}
-	/*
-	cout<<"value test new-value="<<nodeTable[1][1].msg[DIR_UP][2]<<endl;
-	*/
 }
 
 void selectPatch(vector<vector<node> > &nodeTable) {
@@ -449,8 +413,11 @@ void drawRect(Mat &img, patch &p) {
 		}
 	}
 }
+*/
 
 int main(int argc, char **argv) {
+	CudaInpainting ci(argv[1]);
+	/*
 	if(argc != 8) {
 		cout<<"Usage: "<<argv[0]<<" input x y w h output iter_time"<<endl;
 		return 0;
@@ -492,5 +459,6 @@ int main(int argc, char **argv) {
 	drawRect(img, missing);
 
 	imwrite(output, img);
+	*/
 	return 0;
 }

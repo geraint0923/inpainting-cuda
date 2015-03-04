@@ -4,14 +4,14 @@ LDFLAGS = `pkg-config --libs opencv`
 
 all: inpainting
 
-inpainting: inpainting.o inpainting_cuda.o
+inpainting: inpainting.o cuda_inpainting.o
 #	g++ -std=c++11 -g -O2 -o $@ $< `pkg-config --libs opencv`
-	$(CC) -o $@ inpainting.o inpainting_cuda.o $(LDFLAGS)
+	nvcc -o $@ inpainting.o cuda_inpainting.o $(LDFLAGS)
 
-inpainting.o: inpainting.cpp inpainting_cuda.h
+inpainting.o: inpainting.cpp cuda_inpainting.h
 
-inpainting_cuda.o: inpainting_cuda.cu inpainting_cuda.h
-	$(CC) $(CXXFLAGS) -c $<
+cuda_inpainting.o: cuda_inpainting.cpp cuda_inpainting.h
+	nvcc $(CXXFLAGS) -c $< -o $@
 
 .PHONY: clean
 
