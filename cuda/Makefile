@@ -10,7 +10,7 @@ inpainting: inpainting.o cuda_inpainting.o
 
 inpainting.o: inpainting.cpp cuda_inpainting.h
 
-cuda_inpainting.o: cuda_inpainting.cpp cuda_inpainting.h
+cuda_inpainting.o: cuda_inpainting.cu cuda_inpainting.h
 	nvcc $(CXXFLAGS) -c $< -o $@
 
 .PHONY: clean

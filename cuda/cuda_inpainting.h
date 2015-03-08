@@ -17,7 +17,22 @@ public:
 	CudaInpainting(const char *path);
 	bool Inpainting(int x, int y, int width, int height, int iterTime);
 	~CudaInpainting();
-private:
+
+	enum EPOS {
+		UP_DOWN = 0,
+		DOWN_UP,
+		LEFT_RIGHT,
+		RIGHT_LEFT,
+		EPOS_COUNT,
+	};
+	
+	enum EDIR {
+		DIR_UP = 0, 
+		DIR_DOWN,
+		DIR_LEFT,
+		DIR_RIGHT,
+		DIR_COUNT,
+	};
 	static const int RADIUS;
 	static const float RANGE_RATIO;
 
@@ -27,13 +42,6 @@ private:
 	static const int NODE_HEIGHT;
 	static const float CONST_FULL_MSG;
 
-	enum EPOS {
-		UP_DOWN = 0,
-		DOWN_UP,
-		LEFT_RIGHT,
-		RIGHT_LEFT,
-		EPOS_COUNT,
-	};
 
 	class Patch {
 	public:
@@ -53,9 +61,10 @@ private:
 
 	class SSDEntry {
 	public:
-		float data[4];
+		float data[EPOS_COUNT];
 	};
 
+private:
 	// member function
 	Patch RoundUpArea(Patch p);
 	bool OverlapPatch(Patch &p1, Patch &p2);
@@ -78,6 +87,8 @@ private:
 
 	float *imageData;
 	float *deviceImageData;
+	int imgWidth;
+	int imgHeight;
 
 	int patchListSize;
 	Patch *patchList;

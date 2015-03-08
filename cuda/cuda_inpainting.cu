@@ -168,10 +168,118 @@ void CudaInpainting::GenPatches() {
 	CopyToDevice(patchList, devicePatchList, sizeof(Patch) * tmpPatchList.size());
 }
 
+__device__ inline int getMsgIdx(int x, int y, CudaInpainting::EDIR dir, int l, int ww, int hh, int len) {
+	return y * ww * CudaInpainting::EDIR::DIR_COUNT * len + x * CudaInpainting::EDIR::DIR_COUNT * len +
+		dir * len + l;
+}
+
+__device__ inline int getEdgeCostIdx(int x, int y, int l, int ww, int hh, int len) {
+	return y * ww * len  + x * len + l;
+}
+
+__global__ void deviceCalculateSSDTable(float *dImg, int ww, int hh, CudaInpainting::Patch *pl, CudaInpainting::SSDEntry *dSSDTable) {
+	int len = gridDim.x;
+	const int patchSize = CudaInpainting::PATCH_HEIGHT * CudaInpainting::PATCH_WIDTH;	
+	__shared__ float pixels[CudaInpainting::PATCH_HEIGHT][CudaInpainting::PATCH_WIDTH][3];
+	for(int i = threadIdx.x; i < patchSize; i += blockDim.x) {
+		int yy = i / CudaInpainting::PATCH_WIDTH, xx = i % CudaInpainting::PATCH_WIDTH;
+		int iyy = pl[blockIdx.x].y + yy, ixx = pl[blockIdx.x].x + xx;
+		pixels[yy][xx][0] = dImg[iyy * ww * 3 + ixx * 3];
+		pixels[yy][xx][1] = dImg[iyy * ww * 3 + ixx * 3 + 1];
+		pixels[yy][xx][2] = dImg[iyy * ww * 3 + ixx * 3 + 2];
+	}
+
+	__syncthreads();
+
+	for(int i = threadIdx.x; i < len; i += blockDim.x) {
+		int px = pl[i].x, py = pl[i].y;
+		for(int j = 0; j < CudaInpainting::EPOS_COUNT; j++) {
+			float res = 0;
+			int WW, HH;
+			int pxx, pyy;
+			switch(j) {
+				case CudaInpainting::UP_DOWN:
+					WW = CudaInpainting::PATCH_WIDTH;
+					HH = CudaInpainting::NODE_HEIGHT;
+					for(int dy = 0; dy < HH; ++dy) {
+						for(int dx = 0; dx < WW; ++dx) {
+							pxx = px + dx;
+							pyy = py + dy;
+							float rr = pixels[dy + CudaInpainting::NODE_HEIGHT][dx][0] - dImg[pyy * ww * 3 + pxx * 3],
+							      gg = pixels[dy + CudaInpainting::NODE_HEIGHT][dx][1] - dImg[pyy * ww * 3 + pxx * 3 + 1],
+							      bb = pixels[dy + CudaInpainting::NODE_HEIGHT][dx][2] - dImg[pyy * ww * 3 + pxx * 3 + 2];
+							rr *= rr;
+							gg *= gg;
+							bb *= bb;
+							res = rr + gg + bb;
+						}
+					}
+					break;
+				case CudaInpainting::DOWN_UP:
+					WW = CudaInpainting::PATCH_WIDTH;
+					HH = CudaInpainting::NODE_HEIGHT;
+					for(int dy = 0; dy < HH; ++dy) {
+						for(int dx = 0; dx < WW; ++dx) {
+							pxx = px + dx;
+							pyy = py + dy + CudaInpainting::NODE_HEIGHT;
+							float rr = pixels[dy][dx][0] - dImg[pyy * ww * 3 + pxx * 3],
+							      gg = pixels[dy][dx][1] - dImg[pyy * ww * 3 + pxx * 3 + 1],
+							      bb = pixels[dy][dx][2] - dImg[pyy * ww * 3 + pxx * 3 + 2];
+							rr *= rr;
+							gg *= gg;
+							bb *= bb;
+							res = rr + gg + bb;
+						}
+					}
+					break;
+				case CudaInpainting::RIGHT_LEFT:
+					WW = CudaInpainting::NODE_WIDTH;
+					HH = CudaInpainting::PATCH_HEIGHT;
+					for(int dy = 0; dy < HH; ++dy) {
+						for(int dx = 0; dx < WW; ++dx) {
+							pxx = px + dx + CudaInpainting::NODE_WIDTH;
+							pyy = py + dy;
+							float rr = pixels[dy][dx][0] - dImg[pyy * ww * 3 + pxx * 3],
+							      gg = pixels[dy][dx][1] - dImg[pyy * ww * 3 + pxx * 3 + 1],
+							      bb = pixels[dy][dx][2] - dImg[pyy * ww * 3 + pxx * 3 + 2];
+							rr *= rr;
+							gg *= gg;
+							bb *= bb;
+							res = rr + gg + bb;
+						}
+					}
+					break;
+				case CudaInpainting::LEFT_RIGHT:
+					WW = CudaInpainting::NODE_WIDTH;
+					HH = CudaInpainting::PATCH_HEIGHT;
+					for(int dy = 0; dy < HH; ++dy) {
+						for(int dx = 0; dx < WW; ++dx) {
+							pxx = px + dx;
+							pyy = py + dy;
+							float rr = pixels[dy][dx + CudaInpainting::NODE_WIDTH][0] - dImg[pyy * ww * 3 + pxx * 3],
+							      gg = pixels[dy][dx + CudaInpainting::NODE_WIDTH][1] - dImg[pyy * ww * 3 + pxx * 3 + 1],
+							      bb = pixels[dy][dx + CudaInpainting::NODE_WIDTH][2] - dImg[pyy * ww * 3 + pxx * 3 + 2];
+							rr *= rr;
+							gg *= gg;
+							bb *= bb;
+							res = rr + gg + bb;
+						}
+					}
+					break;
+			}
+			dSSDTable[blockIdx.x * len + i].data[j] = res;
+		}
+	}
+}
+
 void CudaInpainting::CalculateSSDTable() {
-	cudaMalloc((void**)&deviceSSDTable, sizeof(float) * patchListSize * patchListSize * EPOS_COUNT);
+	cudaMalloc((void**)&deviceSSDTable, sizeof(SSDEntry) * patchListSize * patchListSize * EPOS_COUNT);
 	if(devicePatchList && deviceSSDTable) {
 		cout << "Calculate SSDTable" << endl;
+		int len = PATCH_HEIGHT * PATCH_WIDTH;
+		if(len > 1024)
+			len = 1024;
+		deviceCalculateSSDTable<<<dim3(patchListSize, 1), dim3(len, 1)>>>(deviceImageData, imgWidth, imgHeight, devicePatchList, deviceSSDTable);
 	}
 }
 
@@ -181,12 +289,50 @@ void CudaInpainting::InitNodeTable() {
 void CudaInpainting::RunIteration() {
 }
 
-__global__ void deviceSelectPatch(float *dEdgeCostTable, float *dChoiceList, int nrPatch) {	
+
+__global__ void deviceSelectPatch(float *dMsgTable, float *dEdgeCostTable, int *dChoiceList, 
+		int ww, int hh,int len) {	
+	int xx = blockDim.x * blockIdx.x + threadIdx.x, yy = blockDim.y * blockIdx. y + threadIdx.y;
+	if(xx < ww && yy << hh) {
+		float maxB = 0;
+		int maxIdx = -1;
+		for(int k = 0; k < len; ++k) {
+			float bl = -dEdgeCostTable[getEdgeCostIdx(xx, yy, k, ww, hh, len)];
+			float val;
+			if(yy - 1 >= 0) {
+				val = dMsgTable[getMsgIdx(xx, yy - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)];
+				if(val > 0)
+					bl -= val;
+			}
+			if(yy + 1 < hh) {
+				val = dMsgTable[getMsgIdx(xx, yy + 1, CudaInpainting::DIR_UP, k, ww, hh, len)];
+				if(val > 0)
+					bl -= val;
+			}
+			if(xx - 1 >= 0) {
+				val = dMsgTable[getMsgIdx(xx - 1, yy, CudaInpainting::DIR_RIGHT, k, ww, hh, len)];
+				if(val > 0)
+					bl -= val;
+			}
+			if(xx + 1 < ww) {
+				val = dMsgTable[getMsgIdx(xx + 1, yy, CudaInpainting::DIR_LEFT, k, ww, hh, len)];
+				if(val > 0)
+					bl -= val;
+			}
+			if(bl > maxB || maxIdx < 0) {
+				maxB = bl;
+				maxIdx = k;
+			}
+		}
+		dChoiceList[yy * ww + xx] = maxIdx;
+	}
 }
 void CudaInpainting::SelectPatch() {
-	if(choiceList && deviceChoiceList && deviceEdgeCostTable) {
+	choiceList = new int[nodeWidth * nodeHeight];
+	cudaMalloc((void**)&deviceChoiceList, sizeof(float) * nodeWidth * nodeHeight);
+	if(choiceList && deviceChoiceList && deviceEdgeCostTable && deviceMsgTable) {
 		cout << "Select the Best Patch" << endl;
-		deviceSelectPatch<<<dim3(), dim3(1,1)>>>(deviceEdgeCostTable, deviceChoiceList, patchListSize);
+		deviceSelectPatch<<<dim3((nodeWidth+15)/16, (nodeHeight+15)/16), dim3(16,16)>>>(deviceMsgTable, deviceEdgeCostTable, deviceChoiceList, nodeWidth, nodeHeight, patchListSize);
 		CopyFromDevice(deviceChoiceList, choiceList, sizeof(int) * nodeWidth * nodeHeight);
 	}
 }
