@@ -50,6 +50,7 @@ public:
 		int width;
 		int height;
 		Patch() : x(0), y(0), width(0), height(0) {}
+		Patch(int ww, int hh);
 		Patch(int xx, int yy, int ww, int hh) : x(xx), y(yy), width(ww), height(hh) {}
 	};
 
@@ -104,6 +105,7 @@ private:
 	Node *nodeTable;
 	Node *deviceNodeTable;
 	float *deviceMsgTable;
+	float *deviceFillMsgTable;
 	float *deviceEdgeCostTable;
 };
 
