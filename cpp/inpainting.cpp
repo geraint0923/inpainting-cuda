@@ -10,8 +10,8 @@
 using namespace std;
 using namespace cv;
 
-#define RADIUS	(2)
-#define RANGE_RATIO	(2.3f)
+#define RADIUS	(32)
+#define RANGE_RATIO	(3.3f)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
@@ -234,6 +234,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 			nodeTable[i][j].label = -1;
 			nodeTable[i][j].x = p.x + j * NODE_WIDTH;
 			nodeTable[i][j].y = p.y + i * NODE_HEIGHT;
+			printf("(%d,%d) => (%d,%d)\n", j, i, nodeTable[i][j].x, nodeTable[i][j].y);
 			nodeTable[i][j].edge_cost.resize(len);
 			for(int k = 0; k < len; k++) {
 				float val = 0;
@@ -495,7 +496,7 @@ int main(int argc, char **argv) {
 	cout<<"patch => " << 2 << " : x=" << patchList[2].x << " y=" << patchList[2].y << endl;
 	vector<vector<vector<float> > > ssdTable = calculateSSDTable(img, patchList);
 
-	cout << "SSD 2=>3 UP_DOWN:" << getSSD(ssdTable, 2, 12, UP_DOWN) << endl;
+	cout << "SSD 2=>7 UP_DOWN:" << getSSD(ssdTable, 2, 7, LEFT_RIGHT) << endl;
 
 	vector<vector<node> > nodeTable;
 	initNodeTable(img, nodeTable, missing, patchList);

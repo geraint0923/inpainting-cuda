@@ -8,8 +8,8 @@ using namespace std;
 using namespace cv;
 
 
-const int CudaInpainting::RADIUS = 2;
-const float CudaInpainting::RANGE_RATIO = 2.3f;
+const int CudaInpainting::RADIUS = 32;
+const float CudaInpainting::RANGE_RATIO = 3.3f;
 
 const int CudaInpainting::PATCH_WIDTH = CudaInpainting::RADIUS;
 const int CudaInpainting::PATCH_HEIGHT = CudaInpainting::RADIUS;
@@ -116,8 +116,8 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 
 	// for debug
 	SSDEntry ent;
-	int xx = 12, yy = 2;
-	EPOS pos = UP_DOWN;
+	int xx = 7, yy = 2;
+	EPOS pos = LEFT_RIGHT;
 	CopyFromDevice(deviceSSDTable+yy*patchListSize+xx, &ent, sizeof(SSDEntry));
 	cout << "SSDEntry 2 -> 3 UP_DOWN: " << ent.data[pos] << endl;
 
@@ -125,6 +125,7 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 	deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 	cudaThreadSynchronize();
 
+	/*
 	for(int i = 0; i < iterTime; i++) {
 		RunIteration();
 		deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
@@ -135,7 +136,6 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 	SelectPatch();
 
 	FillPatch();
-	/*
 	*/
 
 	return true;
@@ -413,6 +413,8 @@ __global__ void deviceInitFirst(CudaInpainting::Node* dNodeTable, CudaInpainting
 	int ww = gridDim.x;
 	dNodeTable[ww * threadIdx.x + blockIdx.x].x = p.x + blockIdx.x * CudaInpainting::NODE_WIDTH;
 	dNodeTable[ww * threadIdx.x + blockIdx.x].y = p.y + threadIdx.x * CudaInpainting::NODE_HEIGHT;
+	printf("x=%d y=%d => (%d,%d)\n", blockIdx.x, threadIdx.x, dNodeTable[ww * threadIdx.x + blockIdx.x],
+			dNodeTable[ww * threadIdx.x + blockIdx.x]);
 }
 
 __device__ CudaInpainting::Patch::Patch(int ww, int hh) {
@@ -469,14 +471,16 @@ void CudaInpainting::InitNodeTable() {
 	nodeWidth = maskPatch.width / NODE_WIDTH + 1;
 	cout << "NodeTable => width=" << nodeWidth << " height=" << nodeHeight << endl;
 	int totalElement = nodeWidth * nodeHeight * DIR_COUNT * patchListSize;
-	cudaMalloc((void**)&deviceNodeTable, sizeof(Node) * nodeWidth * nodeHeight);
-	cudaMalloc((void**)&deviceMsgTable, sizeof(float) * totalElement);
-	cudaMalloc((void**)&deviceFillMsgTable, sizeof(float) * totalElement);
-	cudaMalloc((void**)deviceEdgeCostTable, sizeof(float) * nodeWidth * nodeHeight * patchListSize);
+	cout << cudaGetErrorString(cudaMalloc((void**)&deviceNodeTable, sizeof(Node) * nodeWidth * nodeHeight)) << endl;
+	cout << cudaGetErrorString(cudaMalloc((void**)&deviceMsgTable, sizeof(float) * totalElement)) << endl;
+	cout << cudaGetErrorString(cudaMalloc((void**)&deviceFillMsgTable, sizeof(float) * totalElement)) << endl;
+	cout << cudaGetErrorString(cudaMalloc((void**)&deviceEdgeCostTable, sizeof(float) * nodeWidth * nodeHeight * patchListSize)) << endl;
 	if(deviceNodeTable && deviceMsgTable && deviceFillMsgTable && deviceEdgeCostTable) {
 		cout << "Initialize the Node Table and Message Table" << endl;
 		deviceInitFirst<<<dim3(nodeWidth, 1), dim3(nodeHeight,1)>>>(deviceNodeTable, maskPatch);
 		deviceInitNodeTable<<<dim3(nodeWidth, nodeHeight), dim3(512,1)>>>(deviceImageData, imgWidth, imgHeight, maskPatch, deviceNodeTable, deviceMsgTable, deviceEdgeCostTable, devicePatchList, patchListSize);
+	} else {
+		cout << " Failed to cudaMalloc" << endl;
 	}
 	nodeTable = new Node[nodeWidth * nodeHeight];
 	if(nodeTable) {
@@ -484,6 +488,10 @@ void CudaInpainting::InitNodeTable() {
 			for(int j = 0; j < nodeWidth; ++j) {
 				nodeTable[i * nodeWidth + j].x = maskPatch.x + j * NODE_WIDTH;
 				nodeTable[i * nodeWidth + j].y = maskPatch.y + i * NODE_HEIGHT;
+				/*
+				printf("outside: (%d,%d) => (%d,%d)\n", j, i, nodeTable[i*nodeWidth+j].x,
+						nodeTable[i*nodeHeight+j].y);
+				*/
 			}
 		}
 	}
