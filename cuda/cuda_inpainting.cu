@@ -363,8 +363,8 @@ __device__ float deviceCalculateSSD(float *dImg, int w, int h, CudaInpainting::P
 
 __global__ void deviceInitFirst(CudaInpainting::Node* dNodeTable, CudaInpainting::Patch p) {
 	int ww = gridDim.x;
-	dNodeTable[ww * blockIdx.y + blockIdx.x].x = p.x + blockIdx.x * CudaInpainting::NODE_WIDTH;
-	dNodeTable[ww * blockIdx.y + blockIdx.x].y = p.y + blockIdx.y * CudaInpainting::NODE_HEIGHT;
+	dNodeTable[ww * threadIdx.x + blockIdx.x].x = p.x + blockIdx.x * CudaInpainting::NODE_WIDTH;
+	dNodeTable[ww * threadIdx.x + blockIdx.x].y = p.y + threadIdx.x * CudaInpainting::NODE_HEIGHT;
 }
 
 __device__ CudaInpainting::Patch::Patch(int ww, int hh) {
@@ -426,7 +426,7 @@ void CudaInpainting::InitNodeTable() {
 	cudaMalloc((void**)deviceEdgeCostTable, sizeof(float) * nodeWidth * nodeHeight * patchListSize);
 	if(deviceNodeTable && deviceMsgTable && deviceFillMsgTable && deviceEdgeCostTable) {
 		cout << "Initialize the Node Table and Message Table" << endl;
-		deviceInitFirst<<<dim3(nodeWidth, nodeHeight), dim3(1,1)>>>(deviceNodeTable, maskPatch);
+		deviceInitFirst<<<dim3(nodeWidth, 1), dim3(nodeHeight,1)>>>(deviceNodeTable, maskPatch);
 		deviceInitNodeTable<<<dim3(nodeWidth, nodeHeight), dim3(512,1)>>>(deviceImageData, imgWidth, imgHeight, maskPatch, deviceNodeTable, deviceMsgTable, deviceEdgeCostTable, devicePatchList, patchListSize);
 	}
 	nodeTable = new Node[nodeWidth * nodeHeight];
