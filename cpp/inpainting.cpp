@@ -10,8 +10,8 @@
 using namespace std;
 using namespace cv;
 
-#define RADIUS	(16)
-#define RANGE_RATIO	(2.0f)
+#define RADIUS	(2)
+#define RANGE_RATIO	(2.3f)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
@@ -492,7 +492,10 @@ int main(int argc, char **argv) {
 	cout<<"x="<<missing.x<<" y="<<missing.y<<" width="<<missing.width<<" height="<<missing.height<<endl;
 	vector<patch> patchList = genPatches(img, missing);
 	cout<<"Patch Size: "<<patchList.size()<<endl;
+	cout<<"patch => " << 2 << " : x=" << patchList[2].x << " y=" << patchList[2].y << endl;
 	vector<vector<vector<float> > > ssdTable = calculateSSDTable(img, patchList);
+
+	cout << "SSD 2=>3 UP_DOWN:" << getSSD(ssdTable, 2, 12, UP_DOWN) << endl;
 
 	vector<vector<node> > nodeTable;
 	initNodeTable(img, nodeTable, missing, patchList);

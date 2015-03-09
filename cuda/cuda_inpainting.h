@@ -16,6 +16,7 @@ class CudaInpainting {
 public:
 	CudaInpainting(const char *path);
 	bool Inpainting(int x, int y, int width, int height, int iterTime);
+	cv::Mat GetImage();
 	~CudaInpainting();
 
 	enum EPOS {

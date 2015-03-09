@@ -417,7 +417,6 @@ void drawRect(Mat &img, patch &p) {
 
 int main(int argc, char **argv) {
 	CudaInpainting ci(argv[1]);
-	/*
 	if(argc != 8) {
 		cout<<"Usage: "<<argv[0]<<" input x y w h output iter_time"<<endl;
 		return 0;
@@ -429,6 +428,13 @@ int main(int argc, char **argv) {
 	    maskW = atoi(argv[4]),
 	    maskH = atoi(argv[5]),
 	    iterTime = atoi(argv[7]);
+	cout << "Begin to Inpainting" << endl;
+	ci.Inpainting(maskX, maskY, maskW, maskH, iterTime);
+	cout << "Begin to write the image" << endl;
+	imwrite(output, ci.GetImage());
+	cout << "Done" << endl;
+	
+	/*
 	Mat img;
 	img = imread(input, CV_LOAD_IMAGE_COLOR);
 	img.convertTo(img, CV_32FC3);
