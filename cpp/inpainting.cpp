@@ -311,7 +311,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 				*/
 				aroundMsg *= msgFactor;
 				aroundMsg += nodeTable[i][j].edge_cost[k];
-				if(nodeTable[i][j].edge_cost[j] < 0.5)
+				if(nodeTable[i][j].edge_cost[k] > 0.5)
 					msgCount++;
 				for(int ll = 0; ll < len; ll++) {
 					float val, oldVal;
