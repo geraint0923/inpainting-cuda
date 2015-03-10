@@ -228,7 +228,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 				nodeTable[i][j].msg[k].resize(len);
 				for(int l = 0; l < len; l++) {
 					//nodeTable[i][j].msg[k][l] = -1;
-					nodeTable[i][j].msg[k][l] = FULL_MSG;
+					nodeTable[i][j].msg[k][l] = CONST_FULL_MSG;
 				}
 			}
 			nodeTable[i][j].label = -1;
@@ -263,7 +263,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 				}
 				nodeTable[i][j].edge_cost[k] = val;
 				if(val < 1)
-					nodeTable[i][j].edge_cost[k] = FULL_MSG;
+					nodeTable[i][j].edge_cost[k] = CONST_FULL_MSG;
 			}
 			nodeTable[i][j].newMsg = nodeTable[i][j].msg;
 		}
@@ -281,29 +281,35 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 				float msgFactor = 0.6;
 				matchFactor = 10;
 				msgCount = msgFactor * 3 + matchFactor;
+				//printf("1 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				if(i != 0) {
 					aroundMsg += nodeTable[i-1][j].msg[DIR_DOWN][k];
+				//printf("11 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 					//msgCount++;
 				} else {
-					aroundMsg += FULL_MSG;
+					aroundMsg += CONST_FULL_MSG;
+				//printf("12 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				}
+				//printf("2 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				if(i != hh - 1) {
 					aroundMsg += nodeTable[i+1][j].msg[DIR_UP][k];
 					//msgCount++;
 				} else {
-					aroundMsg += FULL_MSG;
+					aroundMsg += CONST_FULL_MSG;
 				}
+				//printf("3 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				if(j != 0) {
 					aroundMsg += nodeTable[i][j-1].msg[DIR_RIGHT][k];
 					//msgCount++;
 				} else {
-					aroundMsg += FULL_MSG;
+					aroundMsg += CONST_FULL_MSG;
 				}
+				//printf("4 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				if(j != ww - 1) {
 					aroundMsg += nodeTable[i][j+1].msg[DIR_LEFT][k];
 					//msgCount++;
 				} else {
-					aroundMsg += FULL_MSG;
+					aroundMsg += CONST_FULL_MSG;
 				}
 				/*
 				if(msgCount > 0.5) {
@@ -314,6 +320,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 				aroundMsg += nodeTable[i][j].edge_cost[k];
 				if(nodeTable[i][j].edge_cost[k] > 0.5)
 					msgCount++;
+				//printf("(%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				for(int ll = 0; ll < len; ll++) {
 					float val, oldVal;
 					// up
@@ -372,7 +379,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			}
 		}
 	}
-	int xx = 0, yy = 0;
+	int xx = 0, yy = 1;
 	printf("(%d,%d) %d\n", xx, yy, len);
 	for(int k = 0; k < len; k++) {
 		printf("%f ", nodeTable[yy][xx].newMsg[DIR_RIGHT][k]);
@@ -517,7 +524,8 @@ int main(int argc, char **argv) {
 	}
 	
 	//fillPatch(img, nodeTable);
-	for(int i = 0; i < iterTime; i++) {
+	//for(int i = 0; i < iterTime; i++) {
+	for(int i = 0; i < 1; i++) {
 		propagateMsg(nodeTable, ssdTable);
 		cout<<"ITERATION "<<i<<endl;
 	}
