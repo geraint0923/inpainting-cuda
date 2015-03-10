@@ -464,6 +464,17 @@ __global__ void deviceInitNodeTable(float *dImg, int w, int h, CudaInpainting::P
 		}
 		dEdgeCostTable[getEdgeCostIdx(blockIdx.x, blockIdx.y, i, ww, hh, len)] = val;
 	}
+	// just for debug
+	/*
+	__syncthreads();
+	if(threadIdx.x == 0 && blockIdx.x == 1 && blockIdx.y == 0) {
+		printf("(%d,%d) ", blockIdx.x, blockIdx.y);
+		for(int i = 0; i < len; i++) {
+			printf("%f ", dEdgeCostTable[getEdgeCostIdx(blockIdx.x, blockIdx.y, i, ww, hh, len)]);
+		}
+		printf("\n");
+	}
+	*/
 }
 
 void CudaInpainting::InitNodeTable() {

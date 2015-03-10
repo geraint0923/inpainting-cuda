@@ -500,6 +500,15 @@ int main(int argc, char **argv) {
 
 	vector<vector<node> > nodeTable;
 	initNodeTable(img, nodeTable, missing, patchList);
+	for(int i = 0; i < nodeTable.size(); i++) {
+		for(int j = 0; j < nodeTable.size(); j++) {
+			cout << "(" << j <<","<<i<<") ";
+			for(int k = 0; k < nodeTable[i][j].edge_cost.size(); k++) {
+				cout << nodeTable[i][j].edge_cost[k] << " ";
+			}
+			cout << endl;
+		}
+	}
 	
 	//fillPatch(img, nodeTable);
 	for(int i = 0; i < iterTime; i++) {
