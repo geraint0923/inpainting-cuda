@@ -517,128 +517,47 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 	float aroundMsg, msgCount, matchFactor;
 	float msgFactor = 0.6;
 	matchFactor = 1.2;
-	/*
-	for(int k = threadIdx.x; k < len; k += blockDim.x) {
-		msgCount = msgFactor * 3 + matchFactor;
-		aroundMsg = 0;
-		//printf("1 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		if(i != 0) {
-			aroundMsg += dMsgTable[getMsgIdx(j, i - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)];
-		//printf("11 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		} else {
-			aroundMsg += CudaInpainting::CONST_FULL_MSG;
-		//printf("12 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		}
-		//printf("2 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		if(i != hh - 1) {
-			aroundMsg += dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_UP, k, ww, hh, len)];
-		} else {
-			aroundMsg += CudaInpainting::CONST_FULL_MSG;
-		}
-		//printf("3 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		if(j != 0) {
-			aroundMsg += dMsgTable[getMsgIdx(j - 1, i, CudaInpainting::DIR_RIGHT, k, ww, hh, len)];
-		} else {
-			aroundMsg += CudaInpainting::CONST_FULL_MSG;
-		}
-		//printf("4 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		if(j != ww - 1) {
-			aroundMsg += dMsgTable[getMsgIdx(j + 1, i, CudaInpainting::DIR_LEFT, k, ww, hh, len)];
-		} else {
-			aroundMsg += CudaInpainting::CONST_FULL_MSG;
-		}
-		aroundMsg *= msgFactor;
-		float edgeVal = dEdgeCostTable[getEdgeCostIdx(j, i, k, ww, hh, len)];
-		aroundMsg += edgeVal;
-		if(edgeVal > 0.5)
-			++msgCount;
-		//printf("msgCount=%f %f\n", msgCount, edgeVal);
-		//printf("(%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
-		for(int ll = 0; ll < len; ++ll) {
-			float val, oldVal;
-			// up
-			if(i != 0) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::DOWN_UP] * matchFactor;
-				val -= dMsgTable[getMsgIdx(j, i - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)] * msgFactor;
-				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_UP, ll, ww, hh, len);
-				val /= msgCount;
-				oldVal = dFillMsgTable[targetIdx];
-				//printf("(%d,%d,-%d) => val=%f\n", j, i, ll, val);
-				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
-				}
-			}
-			// down
-			if(i != hh - 1) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::UP_DOWN] * matchFactor;
-				val -= dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_UP, k, ww, hh, len)] * msgFactor;
-				val /= msgCount;
-				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_DOWN, ll, ww, hh, len);
-				oldVal = dFillMsgTable[targetIdx];
-				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
-				}
-			}
-			// left
-			if(j != 0) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::RIGHT_LEFT] * matchFactor;
-				val -= dMsgTable[getMsgIdx(j - 1, i, CudaInpainting::DIR_RIGHT, k, ww, hh, len)] * msgFactor;
-				val /= msgCount;
-				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_LEFT, ll, ww, hh, len);
-				oldVal = dFillMsgTable[targetIdx];
-				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
-				}
-			}
-			// right
-			if(j != ww - 1) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::LEFT_RIGHT] * matchFactor;
-				val -= dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_LEFT, k, ww, hh, len)] * msgFactor;
-				val /= msgCount;
-				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_RIGHT, ll, ww, hh, len);
-				oldVal = dFillMsgTable[targetIdx];
-				printf("(%d,%d,-%d) => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
-				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				printf("(%d,%d,-%d)** => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
-				}
-			}
-		}
-	}
-	*/
 	msgCount = msgFactor * 3 + matchFactor + 1;
 	for(int ll = threadIdx.x; ll < len; ll += blockDim.x) {
+		float up_val, down_val, left_val, right_val;
+		// up
+		if(i != 0) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_UP, ll, ww, hh, len);
+			up_val = dFillMsgTable[targetIdx];
+		}
+		// down
+		if(i != hh - 1) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_DOWN, ll, ww, hh, len);
+			down_val = dFillMsgTable[targetIdx];
+		}
+		// left
+		if(j != 0) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_LEFT, ll, ww, hh, len);
+			left_val = dFillMsgTable[targetIdx];
+		}
+		// right
+		if(j != ww - 1) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_RIGHT, ll, ww, hh, len);
+			right_val = dFillMsgTable[targetIdx];
+		}
+
 		for(int k = 0; k < len; ++k) {
 			aroundMsg = 0;
-			//printf("1 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			if(i != 0) {
 				aroundMsg += dMsgTable[getMsgIdx(j, i - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)];
-			//printf("11 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			} else {
 				aroundMsg += CudaInpainting::CONST_FULL_MSG;
-			//printf("12 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			}
-			//printf("2 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			if(i != hh - 1) {
 				aroundMsg += dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_UP, k, ww, hh, len)];
 			} else {
 				aroundMsg += CudaInpainting::CONST_FULL_MSG;
 			}
-			//printf("3 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			if(j != 0) {
 				aroundMsg += dMsgTable[getMsgIdx(j - 1, i, CudaInpainting::DIR_RIGHT, k, ww, hh, len)];
 			} else {
 				aroundMsg += CudaInpainting::CONST_FULL_MSG;
 			}
-			//printf("4 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			if(j != ww - 1) {
 				aroundMsg += dMsgTable[getMsgIdx(j + 1, i, CudaInpainting::DIR_LEFT, k, ww, hh, len)];
 			} else {
@@ -647,7 +566,6 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			aroundMsg *= msgFactor;
 			float edgeVal = dEdgeCostTable[getEdgeCostIdx(j, i, k, ww, hh, len)];
 			aroundMsg += edgeVal;
-			//printf("(%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			float val, oldVal;
 			// up
 			if(i != 0) {
@@ -655,12 +573,10 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 				val -= dMsgTable[getMsgIdx(j, i - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)] * msgFactor;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_UP, ll, ww, hh, len);
 				val /= msgCount;
-				oldVal = dFillMsgTable[targetIdx];
+				oldVal = up_val;
 				//printf("(%d,%d,-%d) => val=%f\n", j, i, ll, val);
 				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
+					up_val = val;
 				}
 			}
 			// down
@@ -669,11 +585,9 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 				val -= dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_UP, k, ww, hh, len)] * msgFactor;
 				val /= msgCount;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_DOWN, ll, ww, hh, len);
-				oldVal = dFillMsgTable[targetIdx];
+				oldVal = down_val;
 				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
+					down_val = val;
 				}
 			}
 			// left
@@ -682,11 +596,9 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 				val -= dMsgTable[getMsgIdx(j - 1, i, CudaInpainting::DIR_RIGHT, k, ww, hh, len)] * msgFactor;
 				val /= msgCount;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_LEFT, ll, ww, hh, len);
-				oldVal = dFillMsgTable[targetIdx];
+				oldVal = left_val;
 				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
+					left_val = val;
 				}
 			}
 			// right
@@ -696,15 +608,33 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 				//printf("(%d,%d,-%d) => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
 				val /= msgCount;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_RIGHT, ll, ww, hh, len);
-				oldVal = dFillMsgTable[targetIdx];
+				oldVal = right_val;
 				if(val < oldVal) {
-					dFillMsgTable[targetIdx] = val;
-				//printf("(%d,%d,-%d)** => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
-				} else {
-					dFillMsgTable[targetIdx] = oldVal;
+					right_val = val;
 				}
 			}
 		}
+		// up
+		if(i != 0) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_UP, ll, ww, hh, len);
+			dFillMsgTable[targetIdx] = up_val;
+		}
+		// down
+		if(i != hh - 1) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_DOWN, ll, ww, hh, len);
+			dFillMsgTable[targetIdx] = down_val;
+		}
+		// left
+		if(j != 0) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_LEFT, ll, ww, hh, len);
+			dFillMsgTable[targetIdx] = left_val;
+		}
+		// right
+		if(j != ww - 1) {
+			int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_RIGHT, ll, ww, hh, len);
+			dFillMsgTable[targetIdx] = right_val;
+		}
+
 		/*
 		if(edgeVal > 0.5)
 			++msgCount;
