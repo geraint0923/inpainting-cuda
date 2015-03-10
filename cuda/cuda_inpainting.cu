@@ -101,6 +101,7 @@ __global__ void deviceCopyMem(float *src, float *dst, int elem) {
 	    totalSize = blockDim.x * gridDim.x;
 	for(int i = idx; i < elem; i += totalSize) {
 		dst[i] = src[i];
+		//printf("%d .  %f <= %f\n", i, dst[i], src[i]);
 	}
 }
 
@@ -125,8 +126,8 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 	deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 	cudaThreadSynchronize();
 
-	/*
 	for(int i = 0; i < iterTime; i++) {
+	//for(int i = 0; i < 1; i++) {
 		RunIteration();
 		deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 		cudaThreadSynchronize();
@@ -136,6 +137,7 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 	SelectPatch();
 
 	FillPatch();
+	/*
 	*/
 
 	return true;
@@ -489,7 +491,7 @@ void CudaInpainting::InitNodeTable() {
 	if(deviceNodeTable && deviceMsgTable && deviceFillMsgTable && deviceEdgeCostTable) {
 		cout << "Initialize the Node Table and Message Table" << endl;
 		deviceInitFirst<<<dim3(nodeWidth, 1), dim3(nodeHeight,1)>>>(deviceNodeTable, maskPatch);
-		deviceInitNodeTable<<<dim3(nodeWidth, nodeHeight), dim3(512,1)>>>(deviceImageData, imgWidth, imgHeight, maskPatch, deviceNodeTable, deviceMsgTable, deviceEdgeCostTable, devicePatchList, patchListSize);
+		deviceInitNodeTable<<<dim3(nodeWidth, nodeHeight), dim3(512,1)>>>(deviceImageData, imgWidth, imgHeight, maskPatch, deviceNodeTable, deviceFillMsgTable, deviceEdgeCostTable, devicePatchList, patchListSize);
 	} else {
 		cout << " Failed to cudaMalloc" << endl;
 	}
@@ -597,10 +599,18 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			}
 		}
 	}
+	if(blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0) {
+		printf("(%d,%d) %d", blockIdx.x, blockIdx.y, len);
+		for(int k = 0; k < len; k++) {
+			printf("%f ", dFillMsgTable[getMsgIdx(j, i, CudaInpainting::DIR_RIGHT, k, ww,hh,len)]);
+		}
+		printf("\n");
+	}
 }
 
 void CudaInpainting::RunIteration() {
 	if(deviceMsgTable && deviceFillMsgTable && deviceSSDTable && deviceEdgeCostTable) {
+		cout << "Run Iteration" << endl;
 		int lim = 1024;
 		if(patchListSize < lim) {
 			lim = patchListSize;
@@ -613,7 +623,7 @@ void CudaInpainting::RunIteration() {
 __global__ void deviceSelectPatch(float *dMsgTable, float *dEdgeCostTable, int *dChoiceList, 
 		int ww, int hh,int len) {	
 	int xx = blockDim.x * blockIdx.x + threadIdx.x, yy = blockDim.y * blockIdx. y + threadIdx.y;
-	if(xx < ww && yy << hh) {
+	if(xx < ww && yy < hh) {
 		float maxB = 0;
 		int maxIdx = -1;
 		for(int k = 0; k < len; ++k) {
@@ -644,6 +654,7 @@ __global__ void deviceSelectPatch(float *dMsgTable, float *dEdgeCostTable, int *
 				maxIdx = k;
 			}
 		}
+		printf("(%d,%d) (%d,%d) => max %f %d\n", ww, hh, xx, yy, maxB, maxIdx);
 		dChoiceList[yy * ww + xx] = maxIdx;
 	}
 }

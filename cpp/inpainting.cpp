@@ -372,6 +372,12 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			}
 		}
 	}
+	int xx = 0, yy = 0;
+	printf("(%d,%d) %d\n", xx, yy, len);
+	for(int k = 0; k < len; k++) {
+		printf("%f ", nodeTable[yy][xx].newMsg[DIR_RIGHT][k]);
+	}
+	printf("\n");
 	/*
 	cout<<"value test old-value="<<nodeTable[1][1].msg[DIR_UP][2]<<endl;
 	cout<<"value test old-value="<<nodeTable[1][1].newMsg[DIR_UP][2]<<endl;
@@ -412,7 +418,7 @@ void selectPatch(vector<vector<node> > &nodeTable) {
 					maxIdx = k;
 				}
 			}
-			//cout<<i<<","<<j<<" => "<<maxB<<" "<<maxIdx<<endl;
+			cout<<i<<","<<j<<" => "<<maxB<<" "<<maxIdx<<endl;
 			nodeTable[i][j].label = maxIdx;
 		}
 	}
