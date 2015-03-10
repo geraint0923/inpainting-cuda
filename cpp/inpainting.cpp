@@ -10,8 +10,8 @@
 using namespace std;
 using namespace cv;
 
-#define RADIUS	(32)
-#define RANGE_RATIO	(3.3f)
+#define RADIUS	(16)
+#define RANGE_RATIO	(2.0f)
 
 const int PATCH_WIDTH = RADIUS;
 const int PATCH_HEIGHT = RADIUS;
@@ -234,7 +234,7 @@ void initNodeTable(Mat &img, vector<vector<node> > &nodeTable, patch &p, vector<
 			nodeTable[i][j].label = -1;
 			nodeTable[i][j].x = p.x + j * NODE_WIDTH;
 			nodeTable[i][j].y = p.y + i * NODE_HEIGHT;
-			printf("(%d,%d) => (%d,%d)\n", j, i, nodeTable[i][j].x, nodeTable[i][j].y);
+			//printf("(%d,%d) => (%d,%d)\n", j, i, nodeTable[i][j].x, nodeTable[i][j].y);
 			nodeTable[i][j].edge_cost.resize(len);
 			for(int k = 0; k < len; k++) {
 				float val = 0;
@@ -367,6 +367,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 					if(j != ww - 1) {
 						val = aroundMsg + getSSD(ssdTable, k, ll, LEFT_RIGHT) * matchFactor;
 						val -= nodeTable[i][j+1].msg[DIR_LEFT][k] * msgFactor;
+						//printf("(%d,%d,-%d) => val=%f\n", j, i, ll, val);
 						val /= msgCount;
 						oldVal = nodeTable[i][j].newMsg[DIR_RIGHT][ll];
 						if(val < oldVal) {
@@ -379,12 +380,14 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			}
 		}
 	}
+	/*
 	int xx = 0, yy = 1;
 	printf("(%d,%d) %d\n", xx, yy, len);
 	for(int k = 0; k < len; k++) {
 		printf("%f ", nodeTable[yy][xx].newMsg[DIR_RIGHT][k]);
 	}
 	printf("\n");
+	*/
 	/*
 	cout<<"value test old-value="<<nodeTable[1][1].msg[DIR_UP][2]<<endl;
 	cout<<"value test old-value="<<nodeTable[1][1].newMsg[DIR_UP][2]<<endl;
@@ -513,6 +516,7 @@ int main(int argc, char **argv) {
 
 	vector<vector<node> > nodeTable;
 	initNodeTable(img, nodeTable, missing, patchList);
+	/*
 	for(int i = 0; i < nodeTable.size(); i++) {
 		for(int j = 0; j < nodeTable.size(); j++) {
 			cout << "(" << j <<","<<i<<") ";
@@ -522,10 +526,11 @@ int main(int argc, char **argv) {
 			cout << endl;
 		}
 	}
+	*/
 	
 	//fillPatch(img, nodeTable);
-	//for(int i = 0; i < iterTime; i++) {
-	for(int i = 0; i < 1; i++) {
+	for(int i = 0; i < iterTime; i++) {
+	//for(int i = 0; i < 1; i++) {
 		propagateMsg(nodeTable, ssdTable);
 		cout<<"ITERATION "<<i<<endl;
 	}

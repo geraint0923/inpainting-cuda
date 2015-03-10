@@ -1,5 +1,5 @@
 CC = nvcc
-CXXFLAGS = -std=c++11 -g -O0
+CXXFLAGS = -std=c++11 -g -O2
 LDFLAGS = `pkg-config --libs opencv`
 
 all: inpainting
@@ -11,7 +11,7 @@ inpainting: inpainting.o cuda_inpainting.o
 inpainting.o: inpainting.cpp cuda_inpainting.h
 
 cuda_inpainting.o: cuda_inpainting.cu cuda_inpainting.h
-	nvcc $(CXXFLAGS) -G -c $< -o $@
+	nvcc $(CXXFLAGS) -c $< -o $@
 
 .PHONY: clean
 

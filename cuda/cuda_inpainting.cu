@@ -8,8 +8,8 @@ using namespace std;
 using namespace cv;
 
 
-const int CudaInpainting::RADIUS = 32;
-const float CudaInpainting::RANGE_RATIO = 3.3f;
+const int CudaInpainting::RADIUS = 8;
+const float CudaInpainting::RANGE_RATIO = 1.5f;
 
 const int CudaInpainting::PATCH_WIDTH = CudaInpainting::RADIUS;
 const int CudaInpainting::PATCH_HEIGHT = CudaInpainting::RADIUS;
@@ -126,8 +126,8 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 	deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 	cudaThreadSynchronize();
 
-	//for(int i = 0; i < iterTime; i++) {
-	for(int i = 0; i < 1; i++) {
+	for(int i = 0; i < iterTime; i++) {
+	//for(int i = 0; i < 1; i++) {
 		RunIteration();
 		deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 		cudaThreadSynchronize();
@@ -415,8 +415,10 @@ __global__ void deviceInitFirst(CudaInpainting::Node* dNodeTable, CudaInpainting
 	int ww = gridDim.x;
 	dNodeTable[ww * threadIdx.x + blockIdx.x].x = p.x + blockIdx.x * CudaInpainting::NODE_WIDTH;
 	dNodeTable[ww * threadIdx.x + blockIdx.x].y = p.y + threadIdx.x * CudaInpainting::NODE_HEIGHT;
+	/*
 	printf("x=%d y=%d => (%d,%d)\n", blockIdx.x, threadIdx.x, dNodeTable[ww * threadIdx.x + blockIdx.x],
 			dNodeTable[ww * threadIdx.x + blockIdx.x]);
+	*/
 }
 
 __device__ CudaInpainting::Patch::Patch(int ww, int hh) {
@@ -440,7 +442,7 @@ __global__ void deviceInitNodeTable(float *dImg, int w, int h, CudaInpainting::P
 		float val = 0;
 		CudaInpainting::Patch curPatch(CudaInpainting::PATCH_WIDTH, CudaInpainting::PATCH_HEIGHT);
 		if(((blockIdx.y == 0 || blockIdx.y == hh - 1) && (/*blockIdx.x >= 0 && */blockIdx.x <= ww - 1 )) ||
-					((blockIdx.x == 0 || blockIdx.y == ww - 1) && (/*blockIdx.y >= 0 && */blockIdx.y <= hh - 1))) {
+					((blockIdx.x == 0 || blockIdx.x == ww - 1) && (/*blockIdx.y >= 0 && */blockIdx.y <= hh - 1))) {
 			int nodeIdx = ww * blockIdx.y + blockIdx.x;
 			if(blockIdx.x == 0) {
 				curPatch.x = dNodeTable[nodeIdx].x - CudaInpainting::PATCH_WIDTH;
@@ -467,14 +469,16 @@ __global__ void deviceInitNodeTable(float *dImg, int w, int h, CudaInpainting::P
 		dEdgeCostTable[getEdgeCostIdx(blockIdx.x, blockIdx.y, i, ww, hh, len)] = val;
 	}
 	// just for debug
+	/*
 	__syncthreads();
-	if(threadIdx.x == 0 && blockIdx.x == 1 && blockIdx.y == 0) {
+	if(threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 1) {
 		printf("(%d,%d) ", blockIdx.x, blockIdx.y);
 		for(int i = 0; i < len; i++) {
 			printf("%f ", dEdgeCostTable[getEdgeCostIdx(blockIdx.x, blockIdx.y, i, ww, hh, len)]);
 		}
 		printf("\n");
 	}
+	*/
 }
 
 void CudaInpainting::InitNodeTable() {
@@ -643,6 +647,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			aroundMsg *= msgFactor;
 			float edgeVal = dEdgeCostTable[getEdgeCostIdx(j, i, k, ww, hh, len)];
 			aroundMsg += edgeVal;
+			//printf("(%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 			float val, oldVal;
 			// up
 			if(i != 0) {
@@ -687,11 +692,11 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			// right
 			if(j != ww - 1) {
 				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::LEFT_RIGHT] * matchFactor;
-				val -= dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_LEFT, k, ww, hh, len)] * msgFactor;
+				val -= dMsgTable[getMsgIdx(j + 1, i, CudaInpainting::DIR_LEFT, k, ww, hh, len)] * msgFactor;
+				//printf("(%d,%d,-%d) => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
 				val /= msgCount;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_RIGHT, ll, ww, hh, len);
 				oldVal = dFillMsgTable[targetIdx];
-				//printf("(%d,%d,-%d) => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
 				if(val < oldVal) {
 					dFillMsgTable[targetIdx] = val;
 				//printf("(%d,%d,-%d)** => val=%f oldVal=%f\n", j, i, ll, val, oldVal);
@@ -709,6 +714,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 		
 	}
 
+	/*
 	if(blockIdx.x == 0 && blockIdx.y == 1 && threadIdx.x == 0) {
 		printf("(%d,%d) %d\n", blockIdx.x, blockIdx.y, len);
 		for(int k = 0; k < len; k++) {
@@ -716,6 +722,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 		}
 		printf("\n");
 	}
+	*/
 }
 
 void CudaInpainting::RunIteration() {
@@ -764,7 +771,7 @@ __global__ void deviceSelectPatch(float *dMsgTable, float *dEdgeCostTable, int *
 				maxIdx = k;
 			}
 		}
-		printf("(%d,%d) (%d,%d) => max %f %d\n", ww, hh, xx, yy, maxB, maxIdx);
+		//printf("(%d,%d) (%d,%d) => max %f %d\n", ww, hh, xx, yy, maxB, maxIdx);
 		dChoiceList[yy * ww + xx] = maxIdx;
 	}
 }
