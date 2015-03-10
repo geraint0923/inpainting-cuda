@@ -8,7 +8,7 @@ using namespace std;
 using namespace cv;
 
 
-const int CudaInpainting::RADIUS = 16;
+const int CudaInpainting::RADIUS = 12;
 const float CudaInpainting::RANGE_RATIO = 2.0f;
 
 const int CudaInpainting::PATCH_WIDTH = CudaInpainting::RADIUS;
@@ -786,11 +786,11 @@ void CudaInpainting::SelectPatch() {
 }
 
 void CudaInpainting::PastePatch(Mat& img, Node& n, Patch& p) {
-	int xx = n.x - NODE_WIDTH,
-	    yy = n.y - NODE_HEIGHT;
-	for(int i = 0; i < p.height; ++i) {
-		for(int j = 0; j < p.width; ++j) {
-			img.at<Vec3f>(yy + i, xx + j) = img.at<Vec3f>(p.y + i, p.x + j);
+	int xx = n.x - NODE_WIDTH / 2,
+	    yy = n.y - NODE_HEIGHT / 2;
+	for(int i = 0; i < p.height / 2; ++i) {
+		for(int j = 0; j < p.width / 2; ++j) {
+			img.at<Vec3f>(yy + i, xx + j) = img.at<Vec3f>(p.y + NODE_HEIGHT/2 + i, p.x + NODE_WIDTH/2 + j);
 		}
 	}
 }

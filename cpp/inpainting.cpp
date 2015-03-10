@@ -279,7 +279,7 @@ void propagateMsg(vector<vector<node> > &nodeTable, vector<vector<vector<float> 
 			for(int k = 0; k < len; k++) {
 				float aroundMsg = 0, msgCount, matchFactor;
 				float msgFactor = 0.6;
-				matchFactor = 10;
+				matchFactor = 1.2;
 				msgCount = msgFactor * 3 + matchFactor;
 				//printf("1 (%d,%d,%d) => aroundMsg=%f\n", j, i, k, aroundMsg);
 				if(i != 0) {
