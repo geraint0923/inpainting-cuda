@@ -8,8 +8,8 @@ using namespace std;
 using namespace cv;
 
 
-const int CudaInpainting::RADIUS = 8;
-const float CudaInpainting::RANGE_RATIO = 1.5f;
+const int CudaInpainting::RADIUS = 16;
+const float CudaInpainting::RANGE_RATIO = 2.0f;
 
 const int CudaInpainting::PATCH_WIDTH = CudaInpainting::RADIUS;
 const int CudaInpainting::PATCH_HEIGHT = CudaInpainting::RADIUS;
@@ -516,7 +516,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 	int hh = gridDim.y, ww = gridDim.x, i = blockIdx.y, j = blockIdx.x;
 	float aroundMsg, msgCount, matchFactor;
 	float msgFactor = 0.6;
-	matchFactor = 10;
+	matchFactor = 1.2;
 	/*
 	for(int k = threadIdx.x; k < len; k += blockDim.x) {
 		msgCount = msgFactor * 3 + matchFactor;
