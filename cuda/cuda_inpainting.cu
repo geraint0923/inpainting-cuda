@@ -548,6 +548,12 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 		}
 
 		for(int k = 0; k < len; ++k) {
+			/*
+			float dX = (dPatchList[k].x - dPatchList[ll].x) / (float)CudaInpainting::NODE_WIDTH,
+			      dY = dPatchList[k].y - dPatchList[ll].y / (float)CudaInpainting::NODE_HEIGHT;
+			float distDiff = (dX * dX + dY * dY) * 3;
+			*/
+			float distDiff = 1;
 			aroundMsg = 0;
 			if(i != 0) {
 				aroundMsg += dMsgTable[getMsgIdx(j, i - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)];
@@ -575,7 +581,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			float val, oldVal;
 			// up
 			if(i != 0) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::DOWN_UP] * matchFactor;
+				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::DOWN_UP] * matchFactor * distDiff;
 				val -= dMsgTable[getMsgIdx(j, i - 1, CudaInpainting::DIR_DOWN, k, ww, hh, len)] * msgFactor;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_UP, ll, ww, hh, len);
 				val /= msgCount;
@@ -587,7 +593,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			}
 			// down
 			if(i != hh - 1) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::UP_DOWN] * matchFactor;
+				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::UP_DOWN] * matchFactor * distDiff;
 				val -= dMsgTable[getMsgIdx(j, i + 1, CudaInpainting::DIR_UP, k, ww, hh, len)] * msgFactor;
 				val /= msgCount;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_DOWN, ll, ww, hh, len);
@@ -598,7 +604,7 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 			}
 			// left
 			if(j != 0) {
-				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::RIGHT_LEFT] * matchFactor;
+				val = aroundMsg + dSSDTable[k * len + ll].data[CudaInpainting::RIGHT_LEFT] * matchFactor * distDiff;
 				val -= dMsgTable[getMsgIdx(j - 1, i, CudaInpainting::DIR_RIGHT, k, ww, hh, len)] * msgFactor;
 				val /= msgCount;
 				int targetIdx = getMsgIdx(j, i, CudaInpainting::DIR_LEFT, ll, ww, hh, len);
