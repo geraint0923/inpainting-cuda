@@ -8,7 +8,7 @@ using namespace std;
 using namespace cv;
 
 
-const int CudaInpainting::RADIUS = 12;
+const int CudaInpainting::RADIUS = 16;
 const float CudaInpainting::RANGE_RATIO = 2.0f;
 
 const int CudaInpainting::PATCH_WIDTH = CudaInpainting::RADIUS;
@@ -444,26 +444,32 @@ __global__ void deviceInitNodeTable(float *dImg, int w, int h, CudaInpainting::P
 		if(((blockIdx.y == 0 || blockIdx.y == hh - 1) && (/*blockIdx.x >= 0 && */blockIdx.x <= ww - 1 )) ||
 					((blockIdx.x == 0 || blockIdx.x == ww - 1) && (/*blockIdx.y >= 0 && */blockIdx.y <= hh - 1))) {
 			int nodeIdx = ww * blockIdx.y + blockIdx.x;
+			int valCount = 0;
 			if(blockIdx.x == 0) {
 				curPatch.x = dNodeTable[nodeIdx].x - CudaInpainting::PATCH_WIDTH;
 				curPatch.y = dNodeTable[nodeIdx].y - CudaInpainting::NODE_HEIGHT;
 				val += deviceCalculateSSD(dImg, w, h, curPatch, dPatchList[i], CudaInpainting::LEFT_RIGHT);
+				++valCount;
 			} else {
 				curPatch.x = dNodeTable[nodeIdx].x;
 				curPatch.y = dNodeTable[nodeIdx].y - CudaInpainting::NODE_HEIGHT;
 				val += deviceCalculateSSD(dImg, w, h, dPatchList[i], curPatch, CudaInpainting::LEFT_RIGHT);
+				++valCount;
 			}
 			if(blockIdx.y == 0) {
 				curPatch.x = dNodeTable[nodeIdx].x - CudaInpainting::NODE_WIDTH;
 				curPatch.y = dNodeTable[nodeIdx].y - CudaInpainting::PATCH_HEIGHT;
 				val += deviceCalculateSSD(dImg, w, h, curPatch, dPatchList[i], CudaInpainting::UP_DOWN);
+				++valCount;
 			} else {
 				curPatch.x = dNodeTable[nodeIdx].x - CudaInpainting::NODE_WIDTH;
 				curPatch.y = dNodeTable[nodeIdx].y;
 				val += deviceCalculateSSD(dImg, w, h, dPatchList[i], curPatch, CudaInpainting::UP_DOWN);
+				++valCount;
 			}
+			val /= valCount;
 		}
-		if(val < 1) {
+		if(val < 0.5f) {
 			val = CudaInpainting::CONST_FULL_MSG;
 		}
 		dEdgeCostTable[getEdgeCostIdx(blockIdx.x, blockIdx.y, i, ww, hh, len)] = val;
@@ -512,11 +518,11 @@ void CudaInpainting::InitNodeTable() {
 	}
 }
 
-__global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdgeCostTable, int len, float *dMsgTable, float *dFillMsgTable) {
+__global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdgeCostTable, CudaInpainting::Patch *dPatchList, int len, float *dMsgTable, float *dFillMsgTable) {
 	int hh = gridDim.y, ww = gridDim.x, i = blockIdx.y, j = blockIdx.x;
 	float aroundMsg, msgCount, matchFactor;
-	float msgFactor = 0.6;
-	matchFactor = 1.2;
+	float msgFactor = 0.8f;
+	matchFactor = 1.2f;
 	msgCount = msgFactor * 3 + matchFactor + 1;
 	for(int ll = threadIdx.x; ll < len; ll += blockDim.x) {
 		float up_val, down_val, left_val, right_val;
@@ -662,7 +668,7 @@ void CudaInpainting::RunIteration() {
 		if(patchListSize < lim) {
 			lim = patchListSize;
 		}
-		deviceIteration<<<dim3(nodeWidth, nodeHeight),dim3(lim, 1)>>>(deviceSSDTable, deviceEdgeCostTable, patchListSize, deviceMsgTable, deviceFillMsgTable);
+		deviceIteration<<<dim3(nodeWidth, nodeHeight),dim3(lim, 1)>>>(deviceSSDTable, deviceEdgeCostTable,devicePatchList, patchListSize, deviceMsgTable, deviceFillMsgTable);
 	}
 }
 
