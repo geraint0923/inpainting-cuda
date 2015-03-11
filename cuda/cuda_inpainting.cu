@@ -137,6 +137,20 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 	SelectPatch();
 
 	FillPatch();
+
+	Rect rect(maskPatch.x - NODE_WIDTH, maskPatch.y - NODE_HEIGHT, 
+			maskPatch.width + 2 * NODE_WIDTH, maskPatch.height + 2 * NODE_HEIGHT);
+	Mat subMat = image(rect);
+	Mat matArr[3];
+	split(subMat, matArr);
+	
+	for(int i = 0; i < 3; i++) {
+		matArr[i].convertTo(matArr[i], CV_8U);
+		medianBlur(matArr[i], matArr[i], 3);
+		//GaussianBlur(matArr[i], matArr[i], Size(9,9), 0, 0);
+		matArr[i].convertTo(matArr[i], CV_32F);
+	}
+	merge(matArr, 3, subMat);
 	/*
 	*/
 
