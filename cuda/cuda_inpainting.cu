@@ -111,6 +111,8 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 
 	GenPatches();
 	cudaThreadSynchronize();
+	if(patchListSize == 0)
+		return true;
 
 	CalculateSSDTable();
 	cudaThreadSynchronize();
@@ -203,6 +205,9 @@ void CudaInpainting::GenPatches() {
 				tmpPatchList.push_back(cur);
 		}
 	}
+	patchListSize = tmpPatchList.size();
+	if(tmpPatchList.size() == 0)
+		return;
 	cudaMalloc((void**)&devicePatchList, sizeof(Patch) * tmpPatchList.size());
 	patchList = new Patch[tmpPatchList.size()];
 	if(!patchList) {
@@ -213,7 +218,7 @@ void CudaInpainting::GenPatches() {
 		//CopyToDevice(&patchList[i], devicePatchList + i, sizeof(Patch));
 		patchList[i] = tmpPatchList[i];
 	}
-	patchListSize = tmpPatchList.size();
+	//patchListSize = tmpPatchList.size();
 	CopyToDevice(patchList, devicePatchList, sizeof(Patch) * tmpPatchList.size());
 	cout << "GenPatch done, " << patchListSize << " patches generated" << endl;
 	int idx = 23;
