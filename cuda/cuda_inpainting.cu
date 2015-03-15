@@ -18,15 +18,21 @@ const int CudaInpainting::NODE_HEIGHT = CudaInpainting::PATCH_HEIGHT / 2;
 const float CudaInpainting::CONST_FULL_MSG = CudaInpainting::PATCH_WIDTH * 
 			CudaInpainting::PATCH_HEIGHT * 255 * 255 * 3 / 2.0f;
 
+// a hepler fo copying memory to GPU
 static void CopyToDevice(void *src, void *dst, uint32_t size) {
 	cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
 }
 
+// a helper to copying memoery from GPU to the host
 static void CopyFromDevice(void *src, void *dst, uint32_t size) {
 	cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
 }
 
 // public functions
+
+
+// the constructor
+// take one arguement as the input image file
 CudaInpainting::CudaInpainting(const char *path) {
 	initFlag = false;
 	image = imread(path, CV_LOAD_IMAGE_COLOR);
@@ -53,10 +59,13 @@ CudaInpainting::CudaInpainting(const char *path) {
 			imageData[3 * image.cols * y + 3 * x + 2] = vec[2];
 		}
 	}
+
+	// copy the raw data to the GPU
 	CopyToDevice(imageData, deviceImageData, sizeof(float) * 3 * image.cols * image.rows);
 	imgWidth = image.cols;
 	imgHeight = image.rows;
 
+	// initialize all the ointers
 	choiceList = nullptr;
 	nodeTable = nullptr;
 	patchList = nullptr;
@@ -70,6 +79,7 @@ CudaInpainting::CudaInpainting(const char *path) {
 	deviceChoiceList = nullptr;
 }
 
+// destructor for the CudaInpainting
 CudaInpainting::~CudaInpainting() {
 	if(imageData) {
 		delete imageData;
@@ -96,6 +106,7 @@ CudaInpainting::~CudaInpainting() {
 		cudaFree(deviceChoiceList);
 }
 
+// GPU function to copy memory
 __global__ void deviceCopyMem(float *src, float *dst, int elem) {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x,
 	    totalSize = blockDim.x * gridDim.x;
@@ -105,45 +116,54 @@ __global__ void deviceCopyMem(float *src, float *dst, int elem) {
 	}
 }
 
+// the main function for the image inpainting procedure
 bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime) {
 	Patch patch(x, y, width, height);
+	// first generate the rounded up patch
 	maskPatch = RoundUpArea(patch);
 
+	// generate the candidate patches list
 	GenPatches();
 	cudaThreadSynchronize();
 	if(patchListSize == 0)
 		return true;
 
+	// begin to calculate toe SSD table
 	CalculateSSDTable();
 	cudaThreadSynchronize();
 
-	// for debug
+	/*
 	SSDEntry ent;
 	int xx = 7, yy = 2;
 	EPOS pos = LEFT_RIGHT;
 	CopyFromDevice(deviceSSDTable+yy*patchListSize+xx, &ent, sizeof(SSDEntry));
 	cout << "SSDEntry 2 -> 3 UP_DOWN: " << ent.data[pos] << endl;
+	*/
 
+	// before the iterations, we need to initialize the node table and the message
 	InitNodeTable();
 	deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 	cudaThreadSynchronize();
 
 	for(int i = 0; i < iterTime; i++) {
-	//for(int i = 0; i < 1; i++) {
-		RunIteration();
+		RunIteration(i);
 		deviceCopyMem<<<dim3(32,1), dim3(1024,1)>>>(deviceFillMsgTable, deviceMsgTable, nodeWidth * nodeHeight * DIR_COUNT * patchListSize);
 		cudaThreadSynchronize();
 		cout<<"ITERATION "<<i<<endl;
 	}
 
+	// calculate the best patch for each node
 	SelectPatch();
 
+	// fill the patch into the original image 
 	FillPatch();
 
+	// use a median filter to make the edge between two patches more smooth
 	Rect rect(maskPatch.x - NODE_WIDTH, maskPatch.y - NODE_HEIGHT, 
 			maskPatch.width + 2 * NODE_WIDTH, maskPatch.height + 2 * NODE_HEIGHT);
 	Mat subMat = image(rect);
 	Mat matArr[3];
+	// split into multiple color channel
 	split(subMat, matArr);
 	
 	for(int i = 0; i < 3; i++) {
@@ -152,9 +172,8 @@ bool CudaInpainting::Inpainting(int x,int y, int width, int height, int iterTime
 		//GaussianBlur(matArr[i], matArr[i], Size(9,9), 0, 0);
 		matArr[i].convertTo(matArr[i], CV_32F);
 	}
+	// merge the color changes into a color image
 	merge(matArr, 3, subMat);
-	/*
-	*/
 
 	return true;
 }
@@ -174,6 +193,7 @@ CudaInpainting::Patch CudaInpainting::RoundUpArea(Patch p) {
 }
 
 
+// to judge if two given patches have overlap region
 bool CudaInpainting::OverlapPatch(Patch& p1, Patch& p2) {
 	int mLX = p1.x < p2.x ? p2.x : p1.x,
 	    mRX = (p1.x+p1.width) < (p2.x+p2.width) ? (p1.x+p1.width) : (p2.x+p2.width),
@@ -182,6 +202,7 @@ bool CudaInpainting::OverlapPatch(Patch& p1, Patch& p2) {
 	return mRX > mLX && mBY > mTY;
 }
 
+// generate the patches list
 void CudaInpainting::GenPatches() {
 	vector<Patch> tmpPatchList;
 	Patch p = maskPatch;
@@ -215,10 +236,9 @@ void CudaInpainting::GenPatches() {
 		exit(-1);
 	}
 	for(int i = 0; i < tmpPatchList.size(); i++) {
-		//CopyToDevice(&patchList[i], devicePatchList + i, sizeof(Patch));
 		patchList[i] = tmpPatchList[i];
 	}
-	//patchListSize = tmpPatchList.size();
+	// copy the generated patches list to the GPU global memory
 	CopyToDevice(patchList, devicePatchList, sizeof(Patch) * tmpPatchList.size());
 	cout << "GenPatch done, " << patchListSize << " patches generated" << endl;
 	int idx = 23;
@@ -226,15 +246,18 @@ void CudaInpainting::GenPatches() {
 	cout << "devicePatchList=" << devicePatchList << endl;
 }
 
+// a helper to get the message position in the message table
 __device__ inline int getMsgIdx(int x, int y, CudaInpainting::EDIR dir, int l, int ww, int hh, int len) {
 	return y * ww * CudaInpainting::EDIR::DIR_COUNT * len + x * CudaInpainting::EDIR::DIR_COUNT * len +
 		dir * len + l;
 }
 
+// a helper to get the edge cost position in the message table
 __device__ inline int getEdgeCostIdx(int x, int y, int l, int ww, int hh, int len) {
 	return y * ww * len  + x * len + l;
 }
 
+// calculate the SSD table on GPU
 __global__ void deviceCalculateSSDTable(float *dImg, int ww, int hh, CudaInpainting::Patch *pl, CudaInpainting::SSDEntry *dSSDTable) {
 	int len = gridDim.x;
 	const int patchSize = CudaInpainting::PATCH_HEIGHT * CudaInpainting::PATCH_WIDTH;	
@@ -242,24 +265,12 @@ __global__ void deviceCalculateSSDTable(float *dImg, int ww, int hh, CudaInpaint
 	for(int i = threadIdx.x; i < patchSize; i += blockDim.x) {
 		int yy = i / CudaInpainting::PATCH_WIDTH, xx = i % CudaInpainting::PATCH_WIDTH;
 		int iyy = pl[blockIdx.x].y + yy, ixx = pl[blockIdx.x].x + xx;
-//		printf("ww=%d iyy=%d ixx=%d, idx=%d\n", ww, iyy, ixx, iyy*ww*3+ixx*3);
 		pixels[yy][xx][0] = dImg[iyy * ww * 3 + ixx * 3];
 		pixels[yy][xx][1] = dImg[iyy * ww * 3 + ixx * 3 + 1];
 		pixels[yy][xx][2] = dImg[iyy * ww * 3 + ixx * 3 + 2];
 	}
 
 	__syncthreads();
-	/*
-	if(blockIdx.x == 2 && threadIdx.x == 0) {
-		for(int i = 0; i < 2; i++) {
-			for(int j = 0; j < 2; j++) {
-				printf("%f %f %f    ", pixels[i][j][0], pixels[i][j][1], pixels[i][j][2]);
-			}
-			printf("\n");
-		}
-		printf("===========\n");
-	}
-	*/
 
 	for(int i = threadIdx.x; i < len; i += blockDim.x) {
 		int px = pl[i].x, py = pl[i].y;
@@ -278,20 +289,10 @@ __global__ void deviceCalculateSSDTable(float *dImg, int ww, int hh, CudaInpaint
 							float rr = pixels[dy + CudaInpainting::NODE_HEIGHT][dx][0] - dImg[pyy * ww * 3 + pxx * 3],
 							      gg = pixels[dy + CudaInpainting::NODE_HEIGHT][dx][1] - dImg[pyy * ww * 3 + pxx * 3 + 1],
 							      bb = pixels[dy + CudaInpainting::NODE_HEIGHT][dx][2] - dImg[pyy * ww * 3 + pxx * 3 + 2];
-							/*
-							if(blockIdx.x == 2 && i == 2) {
-								printf("=> %f %f %f %f\n", res, rr, gg, bb);
-							}
-							*/
 							rr *= rr;
 							gg *= gg;
 							bb *= bb;
 							res += rr + gg + bb;
-							/*
-							if(blockIdx.x == 2 && i == 2) {
-								printf("=> %f %f %f %f\n", res, rr, gg, bb);
-							}
-							*/
 						}
 					}
 					break;
@@ -347,7 +348,6 @@ __global__ void deviceCalculateSSDTable(float *dImg, int ww, int hh, CudaInpaint
 					}
 					break;
 			}
-//			printf("cuda %d->%d pos:%d => %f\n", blockIdx.x, i, j, res);
 			dSSDTable[blockIdx.x * len + i].data[j] = res;
 		}
 	}
@@ -430,36 +430,35 @@ __device__ float deviceCalculateSSD(float *dImg, int w, int h, CudaInpainting::P
 	return res;
 }
 
+// initialize the coordinates of node in table
 __global__ void deviceInitFirst(CudaInpainting::Node* dNodeTable, CudaInpainting::Patch p) {
 	int ww = gridDim.x;
 	dNodeTable[ww * threadIdx.x + blockIdx.x].x = p.x + blockIdx.x * CudaInpainting::NODE_WIDTH;
 	dNodeTable[ww * threadIdx.x + blockIdx.x].y = p.y + threadIdx.x * CudaInpainting::NODE_HEIGHT;
-	/*
-	printf("x=%d y=%d => (%d,%d)\n", blockIdx.x, threadIdx.x, dNodeTable[ww * threadIdx.x + blockIdx.x],
-			dNodeTable[ww * threadIdx.x + blockIdx.x]);
-	*/
 }
 
+// the constructor of patch on GPU
 __device__ CudaInpainting::Patch::Patch(int ww, int hh) {
 	width = ww;
 	height = hh;
 }
 
+// the initialize node table on GPU
 __global__ void deviceInitNodeTable(float *dImg, int w, int h, CudaInpainting::Patch p, CudaInpainting::Node* dNodeTable, float *dMsgTable, float *dEdgeCostTable, CudaInpainting::Patch *dPatchList, int len) {
 	int hh = gridDim.y, ww = gridDim.x;
-	/*
-	dNodeTable[ww * blockIdx.y + blockIdx.x].x = p.x + blockIdx.x * CudaInpainting::NODE_WIDTH;
-	dNodeTable[ww * blockIdx.y + blockIdx.x].y = p.y + blockIdx.y * CudaInpainting::NODE_HEIGHT;
-	*/
 
 	for(int i = threadIdx.x; i < len; i += blockDim.x * blockDim.y) {
+		// initialize the message with the very large values
 		dMsgTable[getMsgIdx(blockIdx.x, blockIdx.y, CudaInpainting::DIR_UP, i, ww, hh, len)] = CudaInpainting::CONST_FULL_MSG;
 		dMsgTable[getMsgIdx(blockIdx.x, blockIdx.y, CudaInpainting::DIR_DOWN, i, ww, hh, len)] = CudaInpainting::CONST_FULL_MSG;
 		dMsgTable[getMsgIdx(blockIdx.x, blockIdx.y, CudaInpainting::DIR_LEFT, i, ww, hh, len)] = CudaInpainting::CONST_FULL_MSG;
 		dMsgTable[getMsgIdx(blockIdx.x, blockIdx.y, CudaInpainting::DIR_RIGHT, i, ww, hh, len)] = CudaInpainting::CONST_FULL_MSG;
 
+		// initialize the edge cost 
 		float val = 0;
 		CudaInpainting::Patch curPatch(CudaInpainting::PATCH_WIDTH, CudaInpainting::PATCH_HEIGHT);
+		
+		// to judge if the current node is on the edge of the node table
 		if(((blockIdx.y == 0 || blockIdx.y == hh - 1) && (/*blockIdx.x >= 0 && */blockIdx.x <= ww - 1 )) ||
 					((blockIdx.x == 0 || blockIdx.x == ww - 1) && (/*blockIdx.y >= 0 && */blockIdx.y <= hh - 1))) {
 			int nodeIdx = ww * blockIdx.y + blockIdx.x;
@@ -506,6 +505,8 @@ __global__ void deviceInitNodeTable(float *dImg, int w, int h, CudaInpainting::P
 	*/
 }
 
+
+// wrap for the initialization of the node table
 void CudaInpainting::InitNodeTable() {
 	nodeHeight = maskPatch.height / NODE_HEIGHT + 1;
 	nodeWidth = maskPatch.width / NODE_WIDTH + 1;
@@ -517,11 +518,16 @@ void CudaInpainting::InitNodeTable() {
 	cout << cudaGetErrorString(cudaMalloc((void**)&deviceEdgeCostTable, sizeof(float) * nodeWidth * nodeHeight * patchListSize)) << endl;
 	if(deviceNodeTable && deviceMsgTable && deviceFillMsgTable && deviceEdgeCostTable) {
 		cout << "Initialize the Node Table and Message Table" << endl;
+		// initialize node table
 		deviceInitFirst<<<dim3(nodeWidth, 1), dim3(nodeHeight,1)>>>(deviceNodeTable, maskPatch);
+
+		// initialize the messages in the node table
 		deviceInitNodeTable<<<dim3(nodeWidth, nodeHeight), dim3(512,1)>>>(deviceImageData, imgWidth, imgHeight, maskPatch, deviceNodeTable, deviceFillMsgTable, deviceEdgeCostTable, devicePatchList, patchListSize);
 	} else {
 		cout << " Failed to cudaMalloc" << endl;
 	}
+
+	// initialize the node table on CPU
 	nodeTable = new Node[nodeWidth * nodeHeight];
 	if(nodeTable) {
 		for(int i = 0; i < nodeHeight; ++i) {
@@ -537,13 +543,21 @@ void CudaInpainting::InitNodeTable() {
 	}
 }
 
-__global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdgeCostTable, CudaInpainting::Patch *dPatchList, int len, float *dMsgTable, float *dFillMsgTable) {
+// the iteration function which will be run on GPU
+__global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdgeCostTable, CudaInpainting::Patch *dPatchList, int len, float *dMsgTable, float *dFillMsgTable, int times) {
 	int hh = gridDim.y, ww = gridDim.x, i = blockIdx.y, j = blockIdx.x;
 	float aroundMsg, msgCount, matchFactor;
 	float msgFactor = 0.8f;
 	matchFactor = 1.2f;
 	msgCount = msgFactor * 3 + matchFactor + 1;
+	/*
+	int bottom = hh - 1 - i, left = ww - 1 - j;
+	if(times < i && times < j && times < bottom && times < left)
+		return;
+	*/
+	// each thread handle one patch in all directions
 	for(int ll = threadIdx.x; ll < len; ll += blockDim.x) {
+		// use register to optimize the running time
 		float up_val, down_val, left_val, right_val;
 		// up
 		if(i != 0) {
@@ -686,18 +700,20 @@ __global__ void deviceIteration(CudaInpainting::SSDEntry *dSSDTable, float *dEdg
 	*/
 }
 
-void CudaInpainting::RunIteration() {
+// the wrap function for iteration in Belief Propagation
+void CudaInpainting::RunIteration(int times) {
 	if(deviceMsgTable && deviceFillMsgTable && deviceSSDTable && deviceEdgeCostTable) {
 		cout << "Run Iteration" << endl;
 		int lim = 1024;
 		if(patchListSize < lim) {
 			lim = patchListSize;
 		}
-		deviceIteration<<<dim3(nodeWidth, nodeHeight),dim3(lim, 1)>>>(deviceSSDTable, deviceEdgeCostTable,devicePatchList, patchListSize, deviceMsgTable, deviceFillMsgTable);
+		deviceIteration<<<dim3(nodeWidth, nodeHeight),dim3(lim, 1)>>>(deviceSSDTable, deviceEdgeCostTable,devicePatchList, patchListSize, deviceMsgTable, deviceFillMsgTable, times);
 	}
 }
 
 
+// select the best patch for each node on GPU
 __global__ void deviceSelectPatch(float *dMsgTable, float *dEdgeCostTable, int *dChoiceList, 
 		int ww, int hh,int len) {	
 	int xx = blockDim.x * blockIdx.x + threadIdx.x, yy = blockDim.y * blockIdx. y + threadIdx.y;
@@ -736,6 +752,8 @@ __global__ void deviceSelectPatch(float *dMsgTable, float *dEdgeCostTable, int *
 		dChoiceList[yy * ww + xx] = maxIdx;
 	}
 }
+
+// the wraper for selecting best patch on GPU
 void CudaInpainting::SelectPatch() {
 	choiceList = new int[nodeWidth * nodeHeight];
 	cudaMalloc((void**)&deviceChoiceList, sizeof(float) * nodeWidth * nodeHeight);
@@ -746,6 +764,7 @@ void CudaInpainting::SelectPatch() {
 	}
 }
 
+// the helper to paste the best patch to the specified node
 void CudaInpainting::PastePatch(Mat& img, Node& n, Patch& p) {
 	int xx = n.x - NODE_WIDTH / 2,
 	    yy = n.y - NODE_HEIGHT / 2;
@@ -756,9 +775,11 @@ void CudaInpainting::PastePatch(Mat& img, Node& n, Patch& p) {
 	}
 }
 
+// paste best patch for all node
 void CudaInpainting::FillPatch() {
 	int hh = nodeHeight,
 	    ww = nodeWidth;
+	// just print the result
 	for(int i = 0; i < hh; ++i) {
 		for(int j = 0; j < ww; ++j) {
 			cout<<choiceList[j + i * ww]<<" ";
